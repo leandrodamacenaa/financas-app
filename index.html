@@ -37,7 +37,9 @@ body{
   background:
     radial-gradient(ellipse 900px 500px at 15% -10%, rgba(155,107,255,0.10), transparent 60%),
     radial-gradient(ellipse 700px 500px at 100% 0%, rgba(43,224,138,0.06), transparent 60%),
+    radial-gradient(ellipse 800px 600px at 50% 100%, rgba(90,200,250,0.045), transparent 65%),
     var(--bg);
+  background-attachment:fixed;
   color:var(--text);
   min-height:100vh;
   font-family:'Inter',sans-serif;
@@ -137,6 +139,9 @@ button{cursor:pointer; border:none; background:none; color:inherit;}
   background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:16px;
   overflow-wrap:break-word; word-break:break-word; min-width:0;
 }
+.streak-grid{display:grid; grid-template-columns:repeat(10, 1fr); gap:4px;}
+.streak-cell{width:100%; aspect-ratio:1; border-radius:3px; background:rgba(255,255,255,0.06); display:block;}
+.streak-cell.active{background:var(--green); box-shadow:0 0 4px rgba(43,224,138,0.5);}
 .dash-side .side-panel-card h4{font-size:12.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-dim); margin-bottom:10px;}
 @media(max-width:1300px){
   .dashboard-grid{grid-template-columns:1fr;}
@@ -375,16 +380,30 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
 .cal-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:6px;}
 .cal-dow{text-align:center; font-size:11px; color:var(--text-dimmer); font-weight:700; padding:4px 0; text-transform:uppercase;}
 .cal-day{
-  min-height:78px; background:var(--card); border:1px solid var(--border); border-radius:10px;
-  padding:6px; display:flex; flex-direction:column; gap:4px;
+  min-height:86px; background:var(--card); border:1.5px solid var(--border); border-radius:10px;
+  padding:6px; display:flex; flex-direction:column; gap:3px; cursor:default; transition:transform .1s, border-color .15s;
 }
-.cal-day.empty{background:transparent; border:none;}
+.cal-day.clickable{cursor:pointer;}
+.cal-day.clickable:hover{border-color:var(--purple); transform:translateY(-1px);}
+.cal-day.empty{background:transparent; border:none; cursor:default;}
 .cal-day.today{border-color:var(--purple); box-shadow:0 0 0 1px var(--purple);}
+.cal-day.future{border-style:dashed;}
+.cal-day.selected{border-color:var(--green); box-shadow:0 0 0 1px var(--green);}
 .cal-day .cal-num{font-size:12px; font-weight:700; color:var(--text-dim);}
 .cal-day.today .cal-num{color:var(--purple);}
 .cal-day .cal-dot{display:flex; gap:3px; flex-wrap:wrap;}
 .cal-day .cal-dot span{width:7px; height:7px; border-radius:50%; display:inline-block;}
 .cal-day .cal-items{font-size:9.5px; color:var(--text-dim); line-height:1.3; overflow:hidden;}
+.cal-day .cal-total{font-size:11px; font-weight:800; margin-top:auto;}
+.cal-day-detail-card{
+  background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:18px; margin-top:16px;
+}
+.cal-item-row{
+  display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 0; border-bottom:1px solid var(--border);
+}
+.cal-item-row:last-child{border-bottom:none;}
+.cal-list-group{margin-bottom:18px;}
+.cal-list-group h5{font-size:12px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.04em; margin-bottom:8px;}
 
 /* ===== Orçamento / Metas ===== */
 .budget-item{
@@ -588,7 +607,10 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
   <!-- SIDEBAR -->
   <aside class="sidebar" id="sidebarEl">
     <div class="brand">
-      <div class="brand-mark">₿</div>
+      <label class="brand-mark" id="avatarLabel" style="cursor:pointer; overflow:hidden; background-size:cover; background-position:center;" title="Clique pra trocar sua foto">
+        <span id="avatarFallback">₿</span>
+        <input type="file" id="avatarInput" accept="image/*" style="display:none;">
+      </label>
       <div class="brand-text"><b>Meu Financeiro</b><span>controle pessoal</span></div>
     </div>
 
@@ -614,8 +636,8 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
 
     <div class="topbar">
       <div class="greeting">
-        <h1>Olá, Leandro! 👋</h1>
-        <p>Aqui está o resumo da sua vida financeira</p>
+        <h1>Olá, Leandro! <span id="moodEmoji">👋</span></h1>
+        <p id="moodSub">Aqui está o resumo da sua vida financeira</p>
       </div>
       <div class="top-right" style="align-items:flex-end;">
         <button class="btn btn-sm" id="btnRefresh" style="margin-bottom:4px;">
@@ -776,17 +798,26 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
     <section class="view" id="view-calendar">
       <div class="section-title">
         <div><h2>Calendário financeiro</h2><div class="sub">Vencimentos de fatura, gastos fixos e eventos do mês</div></div>
-        <div style="display:flex; gap:8px;">
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn btn-sm" id="calViewGrid">📅 Grade</button>
+          <button class="btn btn-sm" id="calViewList">📋 Lista</button>
           <button class="btn btn-sm" id="calPrevMonth">‹ Anterior</button>
           <button class="btn btn-sm" id="calNextMonth">Próximo ›</button>
         </div>
       </div>
+
+      <div id="calendarSummary" class="kpi-grid" style="grid-template-columns:repeat(3,1fr); margin-bottom:16px;"></div>
+
       <div id="calendarLegend" style="display:flex; gap:16px; margin-bottom:14px; font-size:12px; color:var(--text-dim); flex-wrap:wrap;">
-        <span><span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--red); margin-right:5px;"></span>Vencimento de fatura</span>
+        <span><span style="display:inline-block; width:10px; height:10px; border-radius:3px; background:var(--card2); border:1.5px solid var(--text-dim); margin-right:5px;"></span>Passado (real)</span>
+        <span><span style="display:inline-block; width:10px; height:10px; border-radius:3px; background:var(--card2); border:1.5px dashed var(--purple); margin-right:5px;"></span>Futuro (projetado)</span>
+        <span><span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--red); margin-right:5px;"></span>Fatura</span>
         <span><span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--amber); margin-right:5px;"></span>Gasto fixo</span>
         <span><span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--purple); margin-right:5px;"></span>Evento</span>
       </div>
+
       <div id="calendarContainer"></div>
+      <div id="calendarDayDetail"></div>
     </section>
 
     <!-- ================= CARTÕES ================= -->
@@ -930,6 +961,16 @@ function cardBadge(name, size=22){
   const color = CARD_COLORS[name] || '#9ca3af';
   const initial = (name||'?').charAt(0);
   return `<span style="display:inline-flex; align-items:center; justify-content:center; width:${size}px; height:${size}px; border-radius:50%; background:${color}22; color:${color}; font-weight:800; font-size:${size*0.42}px; flex-shrink:0;">${initial}</span>`;
+}
+function emptyStateHTML(message){
+  return `<div class="empty-state" style="color:var(--text-dim);">
+    <svg viewBox="0 0 100 80" width="68" height="54" fill="none" style="margin:0 auto 12px; display:block; opacity:.5;">
+      <rect x="15" y="28" width="70" height="42" rx="6" stroke="currentColor" stroke-width="2.5"/>
+      <path d="M15 40h70" stroke="currentColor" stroke-width="2.5"/>
+      <circle cx="50" cy="34" r="3" fill="currentColor"/>
+      <path d="M30 55h20M30 62h30" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+      <path d="M35 28V18a15 15 0 0 1 30 0v10" stroke="currentColor" stroke-width="2.5"/>
+    </svg>${message}</div>`;
 }
 const EVENT_TYPES = ['Casamento','15 Anos','Aniversário','Arraia','Meio Medico','Aula Da Saudade','Formatura','Corporativo','Confraternização'];
 const FUNCTIONS = ['Bartender','Coordenador','Barback','Garçom'];
@@ -1591,6 +1632,16 @@ function renderDashSidePanel(){
   const fixedT = fixedExpensesTotals();
   const disponivelReal = saldoTotal + reserves.total - t.totalCurrent - t.totalNext - instT.monthlyCommitted - fixedT.monthlyTotal;
 
+  const streakDays = [];
+  const todayD = new Date();
+  for(let i=29; i>=0; i--){
+    const d = new Date(todayD.getFullYear(), todayD.getMonth(), todayD.getDate()-i);
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const count = DB.movements.filter(m=>m.date===dateStr).length;
+    streakDays.push({dateStr, count});
+  }
+  const activeDays = streakDays.filter(d=>d.count>0).length;
+
   panel.innerHTML = `
     <div class="side-panel-card">
       <h4>Pendências</h4>
@@ -1610,7 +1661,40 @@ function renderDashSidePanel(){
         <span style="color:var(--text-dim);">Disponível real</span><b style="color:${disponivelReal<0?'var(--red)':'var(--green)'}">${fmtBRL(disponivelReal)}</b>
       </div>
     </div>
+    <div class="side-panel-card">
+      <h4>Constância — últimos 30 dias</h4>
+      <div class="streak-grid">
+        ${streakDays.map(d=>`<span class="streak-cell ${d.count>0?'active':''}" title="${fmtDate(d.dateStr)}${d.count>0?' — '+d.count+' lançamento(s)':''}"></span>`).join('')}
+      </div>
+      <div style="font-size:11px; color:var(--text-dim); margin-top:8px;">${activeDays} de 30 dias com lançamento</div>
+    </div>
   `;
+}
+
+function animateCountUp(el, target, isCurrency){
+  const start = 0;
+  const duration = 700;
+  const startTime = performance.now();
+  function frame(now){
+    const p = Math.min(1, (now-startTime)/duration);
+    const eased = 1 - Math.pow(1-p, 3); // ease-out cúbico
+    const val = start + (target-start)*eased;
+    el.textContent = isCurrency ? fmtBRL(val) : Math.round(val).toString();
+    if(p < 1) requestAnimationFrame(frame);
+    else el.textContent = isCurrency ? fmtBRL(target) : Math.round(target).toString();
+  }
+  requestAnimationFrame(frame);
+}
+function renderMoodIndicator(disponivelReal){
+  const emojiEl = document.getElementById('moodEmoji');
+  const subEl = document.getElementById('moodSub');
+  if(!emojiEl) return;
+  let emoji, msg;
+  if(disponivelReal < 0){ emoji = '😰'; msg = 'As contas estão apertadas esse mês — vale dar uma olhada nos gastos.'; }
+  else if(disponivelReal < 300){ emoji = '😐'; msg = 'Tá no limite, mas dá pra segurar — fique de olho.'; }
+  else { emoji = '😌'; msg = 'Aqui está o resumo da sua vida financeira'; }
+  emojiEl.textContent = emoji;
+  subEl.textContent = msg;
 }
 
 function renderHeroStats(){
@@ -1634,12 +1718,12 @@ function renderHeroStats(){
   document.getElementById('heroStats').innerHTML = `
     <div class="hero-card balance">
       <div class="hero-label"><span class="hero-icon">${ICONS.reserves}</span>Saldo total (contas)</div>
-      <div class="hero-value">${fmtBRL(saldoTotal)}</div>
+      <div class="hero-value" id="heroSaldoTotal">${fmtBRL(0)}</div>
       <div class="hero-sub">Somando Nubank, Caixa, PicPay, Neon e Mercado Pago — sem contar as reservas/caixinhas</div>
     </div>
     <div class="hero-card spent">
       <div class="hero-label"><span class="hero-icon">${ICONS.down}</span>Gasto no mês</div>
-      <div class="hero-value">${fmtBRL(despesaMes)}</div>
+      <div class="hero-value" id="heroGastoMes">${fmtBRL(0)}</div>
       <div class="hero-sub">Total de despesas lançadas em ${MONTH_NAMES_FULL[new Date().getMonth()]}</div>
     </div>
     <div class="hero-card" style="background:radial-gradient(circle at 85% 0%, ${gaugeColor}22, transparent 60%), linear-gradient(160deg, var(--card2), var(--card));">
@@ -1647,12 +1731,16 @@ function renderHeroStats(){
       <div class="gauge-wrap">
         ${gaugeSVG(pct, gaugeColor)}
         <div>
-          <div class="hero-value" style="font-size:24px; color:${gaugeColor};">${fmtBRL(disponivelReal)}</div>
+          <div class="hero-value" id="heroDisponivel" style="font-size:24px; color:${gaugeColor};">${fmtBRL(0)}</div>
           <div class="hero-sub">Após faturas, parcelas e gastos fixos</div>
         </div>
       </div>
     </div>
   `;
+  animateCountUp(document.getElementById('heroSaldoTotal'), saldoTotal, true);
+  animateCountUp(document.getElementById('heroGastoMes'), despesaMes, true);
+  animateCountUp(document.getElementById('heroDisponivel'), disponivelReal, true);
+  renderMoodIndicator(disponivelReal);
 }
 
 function renderKPIs(){
@@ -2158,7 +2246,7 @@ function renderAlerts(){
 function renderMovTable(){
   const rows = filteredMovements();
   const tbody = document.getElementById('movTableBody');
-  if(rows.length===0){ tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state">Nenhuma movimentação encontrada para os filtros atuais.</div></td></tr>`; return; }
+  if(rows.length===0){ tbody.innerHTML = `<tr><td colspan="8">${emptyStateHTML('Nenhuma movimentação encontrada para os filtros atuais.')}</td></tr>`; return; }
   tbody.innerHTML = rows.map(m=>`
     <tr>
       <td>${fmtDate(m.date)}</td>
@@ -2360,7 +2448,7 @@ function renderEventsView(){
 
   const tbody = document.getElementById('eventTableBody');
   const list = [...DB.events].sort((a,b)=>b.date.localeCompare(a.date));
-  if(list.length===0){ tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state">Nenhum evento cadastrado.</div></td></tr>`; return; }
+  if(list.length===0){ tbody.innerHTML = `<tr><td colspan="9">${emptyStateHTML('Nenhum evento cadastrado ainda.')}</td></tr>`; return; }
   tbody.innerHTML = list.map(e=>`
     <tr>
       <td>#${e.number}</td>
@@ -2601,7 +2689,7 @@ function renderFixedExpensesView(){
   const tbody = document.getElementById('fixedTableBody');
   const list = t.list;
   const comp = currentCompetencia();
-  if(list.length===0){ tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">Nenhum gasto fixo cadastrado ainda.</div></td></tr>`; return; }
+  if(list.length===0){ tbody.innerHTML = `<tr><td colspan="7">${emptyStateHTML('Nenhum gasto fixo cadastrado ainda. Marque "se repete todo mês" ao criar uma movimentação.')}</td></tr>`; return; }
   tbody.innerHTML = list.map(f=>{
     const jaLancado = DB.movements.some(m=>m.fixedExpenseId===f.id && m.competencia===comp);
     return `
@@ -2728,7 +2816,44 @@ function openMonthClosingModal(){
 
 
 let CALENDAR_OFFSET = 0;
+let CALENDAR_VIEW_MODE = 'grid'; // 'grid' | 'list'
+let CALENDAR_SELECTED_DAY = null;
+
+function getDayItems(dateStr, isPast){
+  const items = [];
+  const day = Number(dateStr.split('-')[2]);
+  if(isPast){
+    DB.movements.filter(m=>m.date===dateStr).forEach(m=>{
+      items.push({name:m.description, value:Number(m.amount), kind:m.type==='receita'?'receita':'real', color: m.type==='receita' ? 'var(--green)' : 'var(--text-dim)', movId:m.id});
+    });
+  } else {
+    DB.cards.forEach(c=>{
+      if(c.dueDay===day){
+        items.push({name:`Fatura ${c.name}`, value:getComputedInvoice(c), kind:'fatura', color:'var(--red)', cardName:c.name});
+      }
+    });
+    (DB.fixedExpenses||[]).forEach(f=>{
+      if(f.active && f.billingDay===day){
+        items.push({name:f.name, value:Number(f.amount), kind:'fixo', color:'var(--amber)', fixedId:f.id});
+      }
+    });
+  }
+  DB.events.filter(e=>e.date===dateStr).forEach(e=>{
+    items.push({name:e.local, value:Number(e.totalValue), kind:'evento', color:'var(--purple)', eventId:e.id});
+  });
+  return items;
+}
+
 function renderCalendarView(){
+  const prevBtn = document.getElementById('calPrevMonth');
+  const nextBtn = document.getElementById('calNextMonth');
+  if(prevBtn) prevBtn.style.display = CALENDAR_VIEW_MODE==='list' ? 'none' : '';
+  if(nextBtn) nextBtn.style.display = CALENDAR_VIEW_MODE==='list' ? 'none' : '';
+  if(CALENDAR_VIEW_MODE === 'list'){ renderCalendarList(); }
+  else { renderCalendarGrid(); }
+}
+
+function renderCalendarGrid(){
   const base = new Date();
   const y = base.getFullYear();
   const m = base.getMonth() + CALENDAR_OFFSET;
@@ -2738,32 +2863,133 @@ function renderCalendarView(){
   const firstDow = new Date(viewY, viewM, 1).getDay();
   const todayStr = todayISO();
 
+  document.getElementById('calViewGrid').classList.toggle('btn-primary', CALENDAR_VIEW_MODE==='grid');
+  document.getElementById('calViewList').classList.toggle('btn-primary', CALENDAR_VIEW_MODE==='list');
+
   const titleEl = document.querySelector('#view-calendar .section-title h2');
   if(titleEl) titleEl.textContent = `Calendário financeiro — ${MONTH_NAMES_FULL[viewM]} de ${viewY}`;
 
-  const eventsThisMonth = DB.events.filter(e=>e.date.slice(0,7)===`${viewY}-${String(viewM+1).padStart(2,'0')}`);
+  // monta os itens/dia do mês inteiro pra resumo + mapa de calor
+  const dayTotals = {};
+  const dayItemsMap = {};
+  for(let day=1; day<=daysInMonth; day++){
+    const dateStr = `${viewY}-${String(viewM+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const isPast = dateStr < todayStr;
+    const items = getDayItems(dateStr, isPast || dateStr===todayStr);
+    dayItemsMap[dateStr] = items;
+    dayTotals[dateStr] = items.reduce((s,it)=> s + (it.kind==='receita' ? 0 : it.value), 0);
+  }
+  const maxTotal = Math.max(1, ...Object.values(dayTotals));
+  const totalMonth = Object.values(dayTotals).reduce((s,v)=>s+v,0);
+  const pendingCount = Object.entries(dayItemsMap).filter(([d,items])=> d>=todayStr && items.some(it=>it.kind==='fatura'||it.kind==='fixo')).reduce((s,[,items])=>s+items.filter(it=>it.kind==='fatura'||it.kind==='fixo').length,0);
+  let heaviestDay = null, heaviestVal = -1;
+  Object.entries(dayTotals).forEach(([d,v])=>{ if(v>heaviestVal){ heaviestVal=v; heaviestDay=d; } });
+
+  document.getElementById('calendarSummary').innerHTML = [
+    kpiCard({icon:'installments', color:'red', title:'Total comprometido no mês', value:fmtBRL(totalMonth)}),
+    kpiCard({icon:'events', color:'amber', title:'Cobranças que ainda faltam', value:pendingCount}),
+    kpiCard({icon:'dashboard', color:'purple', title:'Dia mais pesado', value: heaviestVal>0 ? `dia ${Number(heaviestDay.split('-')[2])} (${fmtBRL(heaviestVal)})` : '—'}),
+  ].join('');
 
   const dow = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
   let html = dow.map(d=>`<div class="cal-dow">${d}</div>`).join('');
   for(let i=0;i<firstDow;i++) html += `<div class="cal-day empty"></div>`;
   for(let day=1; day<=daysInMonth; day++){
     const dateStr = `${viewY}-${String(viewM+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-    const dots = [];
-    const items = [];
-    DB.cards.forEach(c=>{ if(c.dueDay===day){ dots.push('var(--red)'); items.push(`Fatura ${c.name}`); } });
-    (DB.fixedExpenses||[]).forEach(f=>{ if(f.active && f.billingDay===day){ dots.push('var(--amber)'); items.push(f.name); } });
-    eventsThisMonth.forEach(e=>{ if(Number(e.date.slice(8,10))===day){ dots.push('var(--purple)'); items.push(e.local); } });
+    const items = dayItemsMap[dateStr];
+    const total = dayTotals[dateStr];
     const isToday = dateStr===todayStr;
+    const isFuture = dateStr > todayStr;
+    const isSelected = dateStr === CALENDAR_SELECTED_DAY;
+    const heat = total>0 ? clamp(total/maxTotal, 0.12, 1) : 0;
+    const bgStyle = total>0 ? `background:linear-gradient(160deg, rgba(255,93,122,${(heat*0.28).toFixed(2)}), var(--card));` : '';
+    const dotColors = [...new Set(items.map(it=>it.color))];
     html += `
-      <div class="cal-day ${isToday?'today':''}">
+      <div class="cal-day ${isToday?'today':''} ${isFuture?'future':''} ${isSelected?'selected':''} ${items.length?'clickable':''}" style="${bgStyle}" data-cal-day="${dateStr}">
         <div class="cal-num">${day}</div>
-        <div class="cal-dot">${dots.map(c=>`<span style="background:${c}"></span>`).join('')}</div>
-        <div class="cal-items">${items.slice(0,2).join('<br>')}${items.length>2?`<br>+${items.length-2}`:''}</div>
+        <div class="cal-dot">${dotColors.map(c=>`<span style="background:${c}"></span>`).join('')}</div>
+        <div class="cal-items">${items.slice(0,2).map(it=>it.name).join('<br>')}${items.length>2?`<br>+${items.length-2}`:''}</div>
+        ${total>0 ? `<div class="cal-total" style="color:${heat>0.6?'var(--red)':'var(--text)'}">${fmtBRL(total)}</div>` : ''}
       </div>`;
   }
   document.getElementById('calendarContainer').innerHTML = `<div class="cal-grid">${html}</div>`;
+  document.getElementById('calendarContainer').querySelectorAll('[data-cal-day]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const d = el.dataset.calDay;
+      CALENDAR_SELECTED_DAY = (CALENDAR_SELECTED_DAY===d) ? null : d;
+      renderCalendarGrid();
+      if(CALENDAR_SELECTED_DAY) renderCalendarDayDetail(CALENDAR_SELECTED_DAY, dayItemsMap[CALENDAR_SELECTED_DAY]);
+      else document.getElementById('calendarDayDetail').innerHTML = '';
+    });
+  });
+  if(CALENDAR_SELECTED_DAY && dayItemsMap[CALENDAR_SELECTED_DAY]){
+    renderCalendarDayDetail(CALENDAR_SELECTED_DAY, dayItemsMap[CALENDAR_SELECTED_DAY]);
+  }
 }
 
+function renderCalendarDayDetail(dateStr, items){
+  const el = document.getElementById('calendarDayDetail');
+  const todayStr = todayISO();
+  const isPast = dateStr < todayStr;
+  el.innerHTML = `
+    <div class="cal-day-detail-card">
+      <h4 style="margin-bottom:10px;">${fmtDate(dateStr)} ${dateStr===todayStr?'(hoje)':isPast?'(passado)':'(previsto)'}</h4>
+      ${items.length===0 ? emptyStateHTML('Nada previsto pra esse dia.') : items.map(it=>`
+        <div class="cal-item-row">
+          <span>${it.name} <span style="color:var(--text-dim); font-size:11px;">${it.kind==='real'?'(lançado)':it.kind==='receita'?'(receita)':it.kind==='fatura'?'(fatura)':it.kind==='fixo'?'(gasto fixo)':'(evento)'}</span></span>
+          <span style="display:flex; align-items:center; gap:10px;">
+            <b style="color:${it.color};">${fmtBRL(it.value)}</b>
+            ${it.kind==='fatura' ? `<button class="btn btn-sm" data-cal-action="pay" data-card="${it.cardName}">Pagar fatura</button>` : ''}
+            ${it.kind==='fixo' ? `<button class="btn btn-sm" data-cal-action="launch" data-fixed="${it.fixedId}">Lançar</button>` : ''}
+            ${(it.kind==='real'||it.kind==='receita') ? `<button class="icon-btn" data-cal-action="edit" data-mov="${it.movId}">${ICONS.edit}</button>` : ''}
+          </span>
+        </div>`).join('')}
+    </div>`;
+  el.querySelectorAll('[data-cal-action="pay"]').forEach(b=>b.addEventListener('click', ()=>openPayInvoiceModal(b.dataset.card)));
+  el.querySelectorAll('[data-cal-action="edit"]').forEach(b=>b.addEventListener('click', ()=>openMovModal(b.dataset.mov)));
+  el.querySelectorAll('[data-cal-action="launch"]').forEach(b=>b.addEventListener('click', ()=>{
+    const f = (DB.fixedExpenses||[]).find(x=>x.id===b.dataset.fixed);
+    if(!f) return;
+    const today = new Date();
+    const day = Math.min(Number(f.billingDay), new Date(today.getFullYear(), today.getMonth()+1, 0).getDate());
+    const date = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    DB.movements.push({
+      id:uid(), date, type:'despesa', category:f.category, account:f.account, paymentMethod:f.paymentMethod,
+      description:f.name, amount:Number(f.amount), competencia:competenciaOf(date), fixedExpenseId:f.id
+    });
+    saveDB(DB); renderAll(); showToast(`${f.name} lançado.`);
+  }));
+}
+
+function renderCalendarList(){
+  document.getElementById('calViewGrid').classList.toggle('btn-primary', CALENDAR_VIEW_MODE==='grid');
+  document.getElementById('calViewList').classList.toggle('btn-primary', CALENDAR_VIEW_MODE==='list');
+  const titleEl = document.querySelector('#view-calendar .section-title h2');
+  if(titleEl) titleEl.textContent = `Calendário financeiro — próximos itens`;
+  document.getElementById('calendarSummary').innerHTML = '';
+
+  const todayStr = todayISO();
+  const upcoming = [];
+  for(let k=0; k<45; k++){
+    const d = new Date(); d.setDate(d.getDate()+k);
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const items = getDayItems(dateStr, k===0);
+    if(items.length) upcoming.push({dateStr, items});
+  }
+  document.getElementById('calendarContainer').innerHTML = upcoming.length===0 ? emptyStateHTML('Nada previsto nos próximos dias.') :
+    upcoming.map(({dateStr,items})=>`
+      <div class="cal-list-group">
+        <h5>${fmtDate(dateStr)}${dateStr===todayStr?' — hoje':''}</h5>
+        <div class="cal-day-detail-card" style="margin-top:0;">
+          ${items.map(it=>`
+            <div class="cal-item-row">
+              <span>${it.name}</span>
+              <b style="color:${it.color};">${fmtBRL(it.value)}</b>
+            </div>`).join('')}
+        </div>
+      </div>`).join('');
+  document.getElementById('calendarDayDetail').innerHTML = '';
+}
 
 function renderBudgetView(){
   const container = document.getElementById('budgetContainer');
@@ -2771,7 +2997,7 @@ function renderBudgetView(){
   const budgets = DB.budgets || {};
   const cats = Object.keys(budgets);
   if(cats.length===0){
-    container.innerHTML = `<div class="empty-state">Nenhum orçamento definido ainda. Clique em "+ Definir orçamento" pra criar um teto mensal por categoria.</div>`;
+    container.innerHTML = emptyStateHTML('Nenhum orçamento definido ainda. Clique em "+ Definir orçamento" pra criar um teto mensal por categoria.');
     chartCard.style.display = 'none';
     destroyChart('budget');
     return;
@@ -2785,7 +3011,7 @@ function renderBudgetView(){
     return `
     <div class="budget-item">
       <div class="bi-top">
-        <b>${cat}</b>
+        <span style="display:flex; align-items:center; gap:10px;">${categoryIconBadge(cat,34)}<b>${cat}</b></span>
         <span><span style="color:${color}; font-weight:700;">${fmtBRL(spent)}</span> <span style="color:var(--text-dim);">de ${fmtBRL(limit)}</span></span>
       </div>
       <div class="budget-bar"><span style="width:${Math.min(pct,100)}%; background:${color};"></span></div>
@@ -2867,7 +3093,7 @@ function renderSavingsGoalView(){
   const container = document.getElementById('savingsGoalContainer');
   const goals = DB.savingsGoals;
   if(goals.length===0){
-    container.innerHTML = `<div class="empty-state">Nenhuma meta definida ainda. Clique em "+ Nova meta" pra criar uma.</div>`;
+    container.innerHTML = emptyStateHTML('Nenhuma meta definida ainda. Clique em "+ Nova meta" pra criar uma.');
     return;
   }
   container.innerHTML = `<div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px;">${goals.map(goal=>{
@@ -3124,6 +3350,42 @@ document.getElementById('btnAddMov').addEventListener('click', ()=>openMovModal(
 document.getElementById('hamburgerBtn').addEventListener('click', openMobileDrawer);
 document.getElementById('sidebarBackdrop').addEventListener('click', closeMobileDrawer);
 document.getElementById('fabAddMov').addEventListener('click', ()=>openMovModal(null));
+document.getElementById('avatarInput').addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev)=>{
+    const img = new Image();
+    img.onload = ()=>{
+      const size = 96;
+      const canvas = document.createElement('canvas');
+      canvas.width = size; canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      const scale = Math.max(size/img.width, size/img.height);
+      const w = img.width*scale, h = img.height*scale;
+      ctx.drawImage(img, (size-w)/2, (size-h)/2, w, h);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+      DB.userAvatar = dataUrl;
+      saveDB(DB);
+      applyAvatar();
+      showToast('Foto atualizada.');
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+});
+function applyAvatar(){
+  const label = document.getElementById('avatarLabel');
+  const fallback = document.getElementById('avatarFallback');
+  if(!label) return;
+  if(DB.userAvatar){
+    label.style.backgroundImage = `url(${DB.userAvatar})`;
+    if(fallback) fallback.style.display = 'none';
+  } else {
+    label.style.backgroundImage = '';
+    if(fallback) fallback.style.display = '';
+  }
+}
 document.getElementById('btnRefresh').addEventListener('click', async ()=>{
   const btn = document.getElementById('btnRefresh');
   btn.disabled = true; btn.style.opacity = '.6';
@@ -3142,8 +3404,10 @@ document.getElementById('btnAddEvent').addEventListener('click', ()=>openEventMo
 document.getElementById('btnAddInstallment').addEventListener('click', ()=>openInstallmentModal(null));
 document.getElementById('btnAddBudget').addEventListener('click', ()=>openBudgetModal(null));
 document.getElementById('btnEditGoal').addEventListener('click', ()=>openSavingsGoalModal());
-document.getElementById('calPrevMonth').addEventListener('click', ()=>{ CALENDAR_OFFSET--; renderCalendarView(); });
-document.getElementById('calNextMonth').addEventListener('click', ()=>{ CALENDAR_OFFSET++; renderCalendarView(); });
+document.getElementById('calPrevMonth').addEventListener('click', ()=>{ CALENDAR_OFFSET--; CALENDAR_SELECTED_DAY=null; renderCalendarView(); });
+document.getElementById('calNextMonth').addEventListener('click', ()=>{ CALENDAR_OFFSET++; CALENDAR_SELECTED_DAY=null; renderCalendarView(); });
+document.getElementById('calViewGrid').addEventListener('click', ()=>{ CALENDAR_VIEW_MODE='grid'; CALENDAR_SELECTED_DAY=null; renderCalendarView(); });
+document.getElementById('calViewList').addEventListener('click', ()=>{ CALENDAR_VIEW_MODE='list'; renderCalendarView(); });
 document.getElementById('btnMonthClosing').addEventListener('click', openMonthClosingModal);
 document.getElementById('btnAddReserve').addEventListener('click', ()=>openReserveModal(null));
 
@@ -3160,6 +3424,7 @@ function safeRun(fn, label){
 }
 
 function renderAll(){
+  safeRun(applyAvatar, 'avatar');
   safeRun(renderHeroStats, 'saldo em destaque');
   safeRun(renderStickyBar, 'barra fixa');
   safeRun(renderDashSidePanel, 'painel lateral');
