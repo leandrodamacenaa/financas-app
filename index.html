@@ -413,6 +413,18 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
 
 <!-- Lógica da tela de login (independente do SDK do Firebase em si) -->
 <script>
+  function __friendlyAuthError(code){
+    const map = {
+      'auth/unauthorized-domain': 'Este site ainda não está autorizado no Firebase. Vá em Authentication → Settings → Authorized domains e adicione este domínio.',
+      'auth/invalid-credential': 'Email ou senha incorretos.',
+      'auth/wrong-password': 'Senha incorreta.',
+      'auth/user-not-found': 'Não existe usuário com esse email.',
+      'auth/invalid-email': 'Email inválido.',
+      'auth/too-many-requests': 'Muitas tentativas — aguarde um pouco e tente de novo.',
+      'auth/network-request-failed': 'Falha de conexão. Verifique sua internet.',
+    };
+    return map[code] || ('Erro ao entrar (' + code + ').');
+  }
   function __doLogin(){
     const email = document.getElementById('loginEmail').value.trim();
     const password = document.getElementById('loginPassword').value;
@@ -420,8 +432,9 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
     errEl.style.display = 'none';
     if(!email || !password){ errEl.textContent = 'Preencha email e senha.'; errEl.style.display = 'block'; return; }
     if(!window.__fb){ errEl.textContent = 'Ainda carregando, tente novamente em 1 segundo.'; errEl.style.display = 'block'; return; }
-    window.__fb.signIn(email, password).catch(()=>{
-      errEl.textContent = 'Email ou senha incorretos.';
+    window.__fb.signIn(email, password).catch((err)=>{
+      console.error('Erro de login:', err);
+      errEl.textContent = __friendlyAuthError(err.code || '');
       errEl.style.display = 'block';
     });
   }
