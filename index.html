@@ -392,11 +392,16 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
   const fbApp = initializeApp(firebaseConfig);
   const auth = getAuth(fbApp);
   const db = getFirestore(fbApp);
-  setPersistence(auth, browserLocalPersistence).catch(()=>{});
+
+  // Garante que a sessão fica salva no aparelho (não precisa logar de novo toda vez).
+  // Só liberamos login/checagem de sessão depois que isso terminar de configurar.
+  const persistenceReady = setPersistence(auth, browserLocalPersistence).catch((e)=>{
+    console.warn('Não consegui configurar persistência local, login pode não ser lembrado:', e);
+  });
 
   window.__fb = {
-    onAuthChange: (cb) => onAuthStateChanged(auth, cb),
-    signIn: (email, password) => signInWithEmailAndPassword(auth, email, password),
+    onAuthChange: (cb) => { persistenceReady.then(()=> onAuthStateChanged(auth, cb)); },
+    signIn: async (email, password) => { await persistenceReady; return signInWithEmailAndPassword(auth, email, password); },
     loadData: async (uid) => {
       const ref = doc(db, "users", uid, "data", "main");
       const snap = await getDoc(ref);
