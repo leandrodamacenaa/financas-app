@@ -250,15 +250,15 @@ button{cursor:pointer; border:none; background:none; color:inherit;}
 .credit-card .cc-name b{font-size:15px; font-weight:700;}
 .cc-brand-dot{width:10px; height:10px; border-radius:50%; box-shadow:0 0 8px currentColor;}
 .cc-label{font-size:10px; letter-spacing:.05em; color:var(--text-dimmer); font-weight:700; text-transform:uppercase;}
-.cc-value-sm{font-size:14px; font-weight:700; margin-top:2px; margin-bottom:6px; overflow-wrap:break-word; word-break:break-word;}
-.cc-value-md{font-size:18px; font-weight:800; margin-top:2px; overflow-wrap:break-word; word-break:break-word;}
+.cc-value-sm{font-size:14px; font-weight:700; margin-top:2px; margin-bottom:6px; white-space:nowrap;}
+.cc-value-md{font-size:19px; font-weight:800; margin-top:2px; white-space:nowrap;}
 .cc-sub{font-size:10.5px; color:var(--text-dim); margin-top:1px;}
 .cc-divider{height:1px; background:var(--border); margin:8px 0;}
-.cc-body{display:flex; align-items:center; gap:16px; margin-top:4px;}
-.ring-wrap{position:relative; width:78px; height:78px; flex-shrink:0;}
+.cc-body{display:flex; flex-direction:column; align-items:center; gap:10px; margin-top:8px; text-align:center;}
+.ring-wrap{position:relative; width:84px; height:84px; flex-shrink:0;}
 .ring-wrap svg{transform:rotate(-90deg);}
-.ring-label{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:800;}
-.cc-facts{flex:1; min-width:0;}
+.ring-label{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:800;}
+.cc-facts{width:100%; min-width:0;}
 .cc-next-row{
   display:flex; justify-content:space-between; align-items:center; font-size:12px; color:var(--text-dim);
   margin-top:8px; padding-top:8px; border-top:1px solid var(--border);
@@ -276,8 +276,8 @@ button{cursor:pointer; border:none; background:none; color:inherit;}
   display:flex; flex-direction:column; gap:10px;
 }
 .chart-card h4{font-size:13.5px; font-weight:700;}
-.chart-card .chart-holder{position:relative; height:260px;}
-.chart-card .chart-holder.small{height:210px;}
+.chart-card .chart-holder{position:relative; height:290px;}
+.chart-card .chart-holder.small{height:270px;}
 
 /* TABLES */
 .table-card{
