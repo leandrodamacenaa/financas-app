@@ -131,6 +131,7 @@ button{cursor:pointer; border:none; background:none; color:inherit;}
 .gauge-wrap svg{flex-shrink:0;}
 
 .dashboard-grid{display:grid; grid-template-columns:1fr 300px; gap:22px; align-items:start;}
+.dash-main{min-width:0;}
 .dash-side{position:sticky; top:76px; display:flex; flex-direction:column; gap:12px;}
 .dash-side .side-panel-card{
   background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:16px;
@@ -144,7 +145,7 @@ button{cursor:pointer; border:none; background:none; color:inherit;}
 .hero-card{
   border-radius:22px; padding:26px 28px; position:relative; overflow:hidden;
   display:flex; flex-direction:column; gap:6px; min-height:118px; justify-content:center;
-  border:1px solid var(--border);
+  border:1px solid var(--border); min-width:0;
 }
 .hero-card.balance{
   background:
@@ -202,7 +203,7 @@ button{cursor:pointer; border:none; background:none; color:inherit;}
 .kpi-card{
   background:linear-gradient(160deg, var(--card2), var(--card));
   border:1px solid var(--border); border-radius:var(--radius);
-  padding:16px; position:relative; overflow:hidden; min-height:128px;
+  padding:16px; position:relative; overflow:hidden; min-height:128px; min-width:0;
   display:flex; flex-direction:column; justify-content:space-between;
   transition:transform .18s ease, border-color .18s;
 }
@@ -219,9 +220,9 @@ button{cursor:pointer; border:none; background:none; color:inherit;}
 .kpi-icon.blue{background:rgba(90,200,250,0.12); color:var(--blue);}
 .kpi-title{font-size:12px; color:var(--text-dim); font-weight:500;}
 .kpi-value{font-size:21px; font-weight:800; margin-top:10px; letter-spacing:-.02em;}
-.kpi-delta{font-size:11px; font-weight:600; margin-top:4px; display:flex; align-items:center; gap:4px;}
-.kpi-delta.up{color:var(--green);}
-.kpi-delta.down{color:var(--red);}
+.kpi-badge{font-size:10.5px; font-weight:700; padding:3px 8px; border-radius:20px;}
+.kpi-badge.up{color:var(--green); background:rgba(43,224,138,0.14);}
+.kpi-badge.down{color:var(--red); background:rgba(255,93,122,0.14);}
 .kpi-spark{height:26px; margin-top:8px;}
 
 /* CENTRAL DOS CARTÕES */
@@ -241,26 +242,36 @@ button{cursor:pointer; border:none; background:none; color:inherit;}
 
 .credit-card{
   background:radial-gradient(circle at 20% 0%, rgba(155,107,255,0.10), transparent 55%), var(--card2);
-  border:1px solid var(--border); border-radius:16px; padding:18px;
-  display:flex; flex-direction:column; gap:12px; position:relative;
+  border:1px solid var(--border); border-radius:16px; padding:18px; min-width:0;
+  display:flex; flex-direction:column; gap:6px; position:relative;
 }
-.credit-card .cc-name{display:flex; align-items:center; justify-content:space-between;}
-.credit-card .cc-name b{font-size:14.5px; font-weight:700;}
+.credit-card .cc-name{display:flex; align-items:center; gap:10px; margin-bottom:6px;}
+.credit-card .cc-name b{font-size:15px; font-weight:700;}
 .cc-brand-dot{width:10px; height:10px; border-radius:50%; box-shadow:0 0 8px currentColor;}
-.cc-body{display:flex; align-items:center; gap:16px;}
+.cc-label{font-size:10px; letter-spacing:.05em; color:var(--text-dimmer); font-weight:700; text-transform:uppercase;}
+.cc-value-sm{font-size:14px; font-weight:700; margin-top:2px; margin-bottom:6px;}
+.cc-value-md{font-size:18px; font-weight:800; margin-top:2px;}
+.cc-sub{font-size:10.5px; color:var(--text-dim); margin-top:1px;}
+.cc-divider{height:1px; background:var(--border); margin:8px 0;}
+.cc-body{display:flex; align-items:center; gap:16px; margin-top:4px;}
 .ring-wrap{position:relative; width:78px; height:78px; flex-shrink:0;}
 .ring-wrap svg{transform:rotate(-90deg);}
 .ring-label{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:800;}
-.cc-facts{flex:1; display:flex; flex-direction:column; gap:5px; font-size:12px;}
-.cc-facts .row{display:flex; justify-content:space-between; color:var(--text-dim);}
-.cc-facts .row b{color:var(--text); font-weight:600;}
-.cc-actions{display:flex; justify-content:flex-end; gap:6px;}
+.cc-facts{flex:1; min-width:0;}
+.cc-next-row{
+  display:flex; justify-content:space-between; align-items:center; font-size:12px; color:var(--text-dim);
+  margin-top:8px; padding-top:8px; border-top:1px solid var(--border);
+}
+.cc-actions{display:flex; justify-content:flex-end; gap:6px; margin-top:4px;}
 
 /* CHARTS */
-.charts-grid{display:grid; grid-template-columns:1.4fr 1fr; gap:16px; margin-top:6px;}
+.charts-grid{display:grid; grid-template-columns:1.4fr 1fr; gap:16px; margin-top:6px; min-width:0;}
 @media(max-width:1100px){.charts-grid{grid-template-columns:1fr;}}
+.charts-grid-3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; min-width:0;}
+@media(max-width:1300px){.charts-grid-3{grid-template-columns:1fr 1fr;}}
+@media(max-width:700px){.charts-grid-3{grid-template-columns:1fr;}}
 .chart-card{
-  background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:18px;
+  background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:18px; min-width:0;
   display:flex; flex-direction:column; gap:10px;
 }
 .chart-card h4{font-size:13.5px; font-weight:700;}
@@ -615,31 +626,33 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
       </div>
     </div>
 
-    <div class="sticky-bar" id="stickyBar"></div>
+    <div id="globalHeaderBlock">
+      <div class="sticky-bar" id="stickyBar"></div>
 
-    <div class="hero-stats" id="heroStats"></div>
+      <div class="hero-stats" id="heroStats"></div>
 
-    <div class="filters-bar">
-      <div class="field"><label>Mês</label>
-        <select id="fMonth"></select>
+      <div class="filters-bar">
+        <div class="field"><label>Mês</label>
+          <select id="fMonth"></select>
+        </div>
+        <div class="field"><label>Ano</label>
+          <select id="fYear"></select>
+        </div>
+        <div class="field"><label>Conta/Cartão</label>
+          <select id="fAccount"></select>
+        </div>
+        <div class="field"><label>Categoria</label>
+          <select id="fCategory"></select>
+        </div>
+        <div class="field"><label>Tipo</label>
+          <select id="fType">
+            <option value="">Todos</option>
+            <option value="receita">Receita</option>
+            <option value="despesa">Despesa</option>
+          </select>
+        </div>
+        <button class="clear-filters" id="clearFilters">Limpar filtros</button>
       </div>
-      <div class="field"><label>Ano</label>
-        <select id="fYear"></select>
-      </div>
-      <div class="field"><label>Conta/Cartão</label>
-        <select id="fAccount"></select>
-      </div>
-      <div class="field"><label>Categoria</label>
-        <select id="fCategory"></select>
-      </div>
-      <div class="field"><label>Tipo</label>
-        <select id="fType">
-          <option value="">Todos</option>
-          <option value="receita">Receita</option>
-          <option value="despesa">Despesa</option>
-        </select>
-      </div>
-      <button class="clear-filters" id="clearFilters">Limpar filtros</button>
     </div>
 
     <!-- ================= DASHBOARD VIEW ================= -->
@@ -666,17 +679,19 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
             <div class="cc-grid" id="ccGrid"></div>
           </div>
 
-          <div class="section-title"><div><h2>Análises</h2><div class="sub">Receitas, despesas e categorias</div></div></div>
+          <div class="section-title"><div><h2>Análises</h2><div class="sub">Receitas, despesas e categorias — clique numa categoria pra ver o detalhe</div></div></div>
           <div class="charts-grid">
             <div class="chart-card"><h4>Receitas x Despesas (12 meses)</h4><div class="chart-holder"><canvas id="chartRxD"></canvas></div></div>
-            <div class="chart-card"><h4>Gastos por categoria</h4><div class="chart-holder"><canvas id="chartCat"></canvas></div></div>
+            <div class="chart-card">
+              <h4>Gastos por categoria</h4>
+              <div class="chart-holder"><canvas id="chartCat"></canvas></div>
+              <div id="categoryDrilldown"></div>
+            </div>
           </div>
-          <div class="charts-grid" style="margin-top:16px;">
-            <div class="chart-card"><h4>Evolução das faturas por cartão</h4><div class="chart-holder small"><canvas id="chartInvoices"></canvas></div></div>
+          <div class="charts-grid-3" style="margin-top:16px;">
+            <div class="chart-card"><h4>Faturas por cartão</h4><div class="chart-holder small"><canvas id="chartInvoices"></canvas></div></div>
             <div class="chart-card"><h4>Evolução das reservas</h4><div class="chart-holder small"><canvas id="chartReserves"></canvas></div></div>
-          </div>
-          <div class="charts-grid" style="margin-top:16px;">
-            <div class="chart-card"><h4>Este mês x média dos últimos 6 meses</h4><div class="chart-holder small"><canvas id="chartComparison"></canvas></div></div>
+            <div class="chart-card"><h4>Este mês x média (6m)</h4><div class="chart-holder small"><canvas id="chartComparison"></canvas></div></div>
           </div>
           <div class="charts-grid" style="margin-top:16px;">
             <div class="chart-card"><h4>Próximos vencimentos</h4><div id="upcomingList"></div></div>
@@ -723,18 +738,10 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
     </section>
 
     <!-- ================= FATURAS ================= -->
-    <section class="view" id="view-invoices">
-      <div class="section-title">
-        <div><h2>Faturas por cartão</h2><div class="sub">O que compõe a fatura de cada cartão, com base nas suas movimentações em crédito</div></div>
-      </div>
-      <div id="invoicesContainer"></div>
-    </section>
-
     <!-- ================= GASTOS FIXOS ================= -->
     <section class="view" id="view-fixed">
       <div class="section-title">
-        <div><h2>Gastos Fixos</h2><div class="sub">Assinaturas e mensalidades recorrentes (Spotify, plano de celular, etc.)</div></div>
-        <button class="btn btn-primary" id="btnAddFixed">+ Novo gasto fixo</button>
+        <div><h2>Gastos Fixos</h2><div class="sub">Assinaturas e mensalidades recorrentes — cadastradas direto em Movimentações, marcando "se repete todo mês"</div></div>
       </div>
       <div class="kpi-grid" id="fixedKpi" style="grid-template-columns:repeat(4,1fr); margin-bottom:20px;"></div>
       <div class="table-card">
@@ -787,6 +794,11 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
         <div><h2>Cartões de crédito</h2><div class="sub">Nubank, PicPay, Neon e Mercado Pago</div></div>
       </div>
       <div class="cc-grid" id="ccGridFull"></div>
+
+      <div class="section-title">
+        <div><h2>Faturas por cartão</h2><div class="sub">O que compõe a fatura de cada cartão, com base nas suas movimentações em crédito</div></div>
+      </div>
+      <div id="invoicesContainer"></div>
     </section>
 
     <!-- ================= PARCELAMENTOS ================= -->
@@ -819,12 +831,6 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
     <section class="view" id="view-settings">
       <div class="section-title"><div><h2>Configurações</h2><div class="sub">Backup e gestão dos seus dados</div></div></div>
       <div class="settings-grid">
-        <div class="settings-card">
-          <h4>Saldo da conta Caixa</h4>
-          <p>A Caixa recebe sua bolsa mensal e não é um cartão de crédito, então o saldo dela é atualizado aqui.</p>
-          <div class="field"><input type="number" step="0.01" id="f_saldo_caixa"></div>
-          <button class="btn btn-primary btn-sm" id="btnSaveCaixa" style="align-self:flex-start;">Salvar saldo</button>
-        </div>
         <div class="settings-card">
           <h4>Exportar dados (JSON)</h4>
           <p>Baixe um arquivo com todos os seus dados: movimentações, eventos, cartões, parcelamentos e reservas. Use como backup.</p>
@@ -891,6 +897,17 @@ const PAYMENT_METHODS = ['Pix','Débito','Crédito','Transferência','Dinheiro']
 const ACCOUNTS = ['Nubank','Caixa','PicPay','Neon','Mercado Pago'];
 const CARD_NAMES = ['Nubank','PicPay','Neon','Mercado Pago'];
 const CARD_COLORS = {'Nubank':'#9b6bff','PicPay':'#2be08a','Neon':'#5ac8fa','Mercado Pago':'#ffb84d'};
+const CARD_ICONS = {
+  'Nubank':'<svg viewBox="0 0 24 24" fill="none"><path d="M6 4c6 0 5 6 9 6s3-6 3-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M6 20c6 0 5-6 9-6s3 6 3 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
+  'PicPay':'<svg viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="18" height="13" rx="3" stroke="currentColor" stroke-width="2.2"/><path d="M3 10h18" stroke="currentColor" stroke-width="2.2"/><circle cx="17" cy="14.2" r="1.4" fill="currentColor"/></svg>',
+  'Neon':'<svg viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" fill="currentColor" fill-opacity="0.15"/></svg>',
+  'Mercado Pago':'<svg viewBox="0 0 24 24" fill="none"><path d="M12 3a6 6 0 0 1 6 6c0 3.5-3 5.5-6 9-3-3.5-6-5.5-6-9a6 6 0 0 1 6-6Z" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><circle cx="12" cy="9" r="2" fill="currentColor"/></svg>',
+};
+function cardIconBadge(name, size=26){
+  const color = CARD_COLORS[name] || '#9ca3af';
+  const icon = CARD_ICONS[name] || `<svg viewBox="0 0 24 24" fill="none"><rect x="2" y="5" width="20" height="14" rx="2.5" stroke="currentColor" stroke-width="2"/></svg>`;
+  return `<span style="display:inline-flex; align-items:center; justify-content:center; width:${size}px; height:${size}px; border-radius:9px; background:${color}22; color:${color}; flex-shrink:0;">${icon.replace('<svg ', `<svg style="width:${size*0.62}px; height:${size*0.62}px;" `)}</span>`;
+}
 const CATEGORY_ICONS = {
   'Alimentação':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>',
   'Transporte':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 13l2-6a2 2 0 0 1 2-1.5h10a2 2 0 0 1 2 1.5l2 6"/><rect x="2" y="13" width="20" height="6" rx="1.5"/><circle cx="7" cy="19" r="1.6"/><circle cx="17" cy="19" r="1.6"/></svg>',
@@ -1095,7 +1112,6 @@ let FILTERS = {month:'', year:'', account:'', category:'', type:'', search:''};
 const NAV_ITEMS = [
   {id:'dashboard', label:'Dashboard', icon:'dashboard'},
   {id:'mov', label:'Movimentações', icon:'mov'},
-  {id:'invoices', label:'Faturas', icon:'cards'},
   {id:'fixed', label:'Gastos Fixos', icon:'installments'},
   {id:'goals', label:'Metas', icon:'reserves'},
   {id:'calendar', label:'Calendário', icon:'events'},
@@ -1119,6 +1135,8 @@ function renderNav(){
       btn.classList.add('active');
       document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
       document.getElementById('view-'+btn.dataset.view).classList.add('active');
+      const headerBlock = document.getElementById('globalHeaderBlock');
+      if(headerBlock) headerBlock.style.display = (btn.dataset.view==='dashboard' || btn.dataset.view==='mov') ? '' : 'none';
       closeMobileDrawer();
       const mainEl = document.querySelector('.main');
       if(mainEl) mainEl.scrollTop = 0;
@@ -1211,6 +1229,11 @@ function prevCompetencia(comp){
   const d = new Date(y, m-2, 1);
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
 }
+function nextCompetencia(comp){
+  const [y,m] = comp.split('-').map(Number);
+  const d = new Date(y, m, 1);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
 function sumByTypeComp(comp, type){
   return DB.movements.filter(m=>m.competencia===comp && m.type===type).reduce((s,m)=>s+Number(m.amount),0);
 }
@@ -1281,6 +1304,52 @@ function eventsTotals(){
   const last = [...DB.events].sort((a,b)=>b.date.localeCompare(a.date))[0];
   return {total, paidCount:paid.length, pendingCount:pending.length, received, toReceive, last};
 }
+function autoLaunchRecurring(){
+  // Lança sozinho, uma vez por mês, os gastos fixos e parcelas ativas — sem duplicar
+  // e sem mexer no mês em que a coisa foi criada (esse já foi tratado manualmente).
+  let launched = 0;
+  const comp = currentCompetencia();
+  const todayDay = new Date().getDate();
+  const today = new Date();
+  const lastDayThisMonth = new Date(today.getFullYear(), today.getMonth()+1, 0).getDate();
+
+  (DB.fixedExpenses||[]).filter(f=>f.active).forEach(f=>{
+    const startsFrom = f.autoLaunchFrom || comp;
+    if(comp < startsFrom) return;
+    const already = DB.movements.some(m=>m.fixedExpenseId===f.id && m.competencia===comp);
+    if(!already && todayDay >= Number(f.billingDay)){
+      const day = Math.min(Number(f.billingDay), lastDayThisMonth);
+      const date = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+      DB.movements.push({
+        id:uid(), date, type:'despesa', category:f.category, account:f.account, paymentMethod:f.paymentMethod,
+        description:f.name, amount:Number(f.amount), competencia:competenciaOf(date), fixedExpenseId:f.id
+      });
+      launched++;
+    }
+  });
+
+  (DB.installments||[]).filter(i=>Number(i.remainingInstallments)>0).forEach(i=>{
+    const startsFrom = i.autoLaunchFrom || comp;
+    if(comp < startsFrom) return;
+    const already = DB.movements.some(m=>m.installmentId===i.id && m.competencia===comp);
+    const billingDay = Number((i.purchaseDate||'').split('-')[2]) || 5;
+    if(!already && todayDay >= billingDay){
+      const day = Math.min(billingDay, lastDayThisMonth);
+      const date = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+      const parcelaAtual = Number(i.installmentsCount) - Number(i.remainingInstallments) + 1;
+      DB.movements.push({
+        id:uid(), date, type:'despesa', category:i.category, account:i.card, paymentMethod:'Crédito',
+        description:`${i.purchase} (Parcela ${parcelaAtual}/${i.installmentsCount})`, amount:Number(i.installmentValue),
+        competencia:competenciaOf(date), installmentId:i.id
+      });
+      i.remainingInstallments = Number(i.remainingInstallments) - 1;
+      launched++;
+    }
+  });
+
+  return launched;
+}
+
 function migrateBaselines(){
   // Primeira vez que essa versão roda: os valores manuais atuais viram o "ponto de
   // partida", e as movimentações que já existiam nesse momento ficam marcadas como
@@ -1304,6 +1373,13 @@ function migrateBaselines(){
     DB.baselinesInitialized = true;
     changed = true;
   }
+  const nextComp = nextCompetencia(currentCompetencia());
+  (DB.fixedExpenses||[]).forEach(f=>{
+    if(!f.autoLaunchFrom){ f.autoLaunchFrom = nextComp; changed = true; }
+  });
+  (DB.installments||[]).forEach(i=>{
+    if(!i.autoLaunchFrom){ i.autoLaunchFrom = nextComp; changed = true; }
+  });
   return changed;
 }
 function freezeAllBaselines(){
@@ -1408,11 +1484,11 @@ function kpiCard({icon,color,title,value,delta,deltaUp,spark,sparkColor}){
   <div class="kpi-card">
     <div class="kpi-top">
       <div class="kpi-icon ${color}">${ICONS[icon]}</div>
+      ${delta!==undefined ? `<span class="kpi-badge ${deltaUp?'up':'down'}">${delta}</span>` : ''}
     </div>
     <div>
       <div class="kpi-title">${title}</div>
       <div class="kpi-value">${value}</div>
-      ${delta!==undefined ? `<div class="kpi-delta ${deltaUp?'up':'down'}">${deltaUp?ICONS.up:ICONS.down} ${delta}</div>` : ''}
     </div>
     ${spark ? `<div class="kpi-spark">${sparklineSVG(spark, sparkColor)}</div>` : ''}
   </div>`;
@@ -1421,7 +1497,7 @@ function kpiCard({icon,color,title,value,delta,deltaUp,spark,sparkColor}){
 function pctDelta(curr, prev){
   if(prev===0) return curr===0 ? {txt:'0%', up:true} : {txt:'novo', up:curr>0};
   const p = ((curr-prev)/Math.abs(prev))*100;
-  return {txt:`${p>=0?'+':''}${p.toFixed(0)}% vs mês ant.`, up:p>=0};
+  return {txt:`${p>=0?'+':''}${p.toFixed(0)}%`, up:p>=0};
 }
 
 function gaugeSVG(pct, color){
@@ -1655,25 +1731,34 @@ function ringSVG(pct, color){
 function creditCardHTML(c, withActions){
   const avail = getAvailableLimit(c);
   const invoice = getComputedInvoice(c);
+  const nextInv = getComputedNextInvoice(c);
   const pct = clamp(((Number(c.limit)-avail)/Number(c.limit))*100,0,100);
   const color = CARD_COLORS[c.name] || '#9b6bff';
   return `
   <div class="credit-card" data-card="${c.name}">
-    <div class="cc-name"><b>${c.name}</b><span class="cc-brand-dot" style="background:${color}; color:${color}"></span></div>
+    <div class="cc-name">${cardIconBadge(c.name,26)}<b>${c.name}</b></div>
+
+    <div class="cc-label">SALDO DA CONTA</div>
+    <div class="cc-value-sm">${fmtBRL(getAccountBalance(c.name))}</div>
+
     <div class="cc-body">
       <div class="ring-wrap">
         ${ringSVG(pct,color)}
         <div class="ring-label">${pct.toFixed(0)}%</div>
       </div>
       <div class="cc-facts">
-        <div class="row"><span>Saldo da conta</span><b>${fmtBRL(getAccountBalance(c.name))}</b></div>
-        <div class="row"><span>Fatura atual</span><b>${fmtBRL(invoice)}</b></div>
-        <div class="row"><span>Próxima fatura</span><b>${fmtBRL(getComputedNextInvoice(c))}</b></div>
-        <div class="row"><span>Limite</span><b>${fmtBRL(c.limit)}</b></div>
-        <div class="row"><span>Disponível</span><b>${fmtBRL(avail)}</b></div>
-        <div class="row"><span>Vencimento</span><b>dia ${c.dueDay}</b></div>
+        <div class="cc-label">FATURA ATUAL</div>
+        <div class="cc-value-md" style="color:var(--red);">${fmtBRL(invoice)}</div>
+        <div class="cc-sub">vence dia ${c.dueDay} · fecha dia ${c.closingDay}</div>
+        <div class="cc-divider"></div>
+        <div class="cc-label">LIMITE DISPONÍVEL</div>
+        <div class="cc-value-md">${fmtBRL(avail)}</div>
+        <div class="cc-sub">de ${fmtBRL(c.limit)}</div>
       </div>
     </div>
+
+    <div class="cc-next-row"><span>Próxima fatura</span><b style="color:var(--amber);">${fmtBRL(nextInv)}</b></div>
+
     ${withActions ? `<div class="cc-actions">
       <button class="btn btn-sm" data-pay-card="${c.name}" ${invoice<=0 ? 'disabled style="opacity:.4; cursor:not-allowed;"' : ''}>Pagar fatura</button>
       <button class="icon-btn" data-edit-card="${c.name}">${ICONS.edit}</button>
@@ -1701,7 +1786,7 @@ function creditCardCompactHTML(c){
 }
 
 function renderCardsCentral(){
-  document.getElementById('ccGrid').innerHTML = DB.cards.map(c=>creditCardCompactHTML(c)).join('');
+  document.getElementById('ccGrid').innerHTML = DB.cards.map(c=>creditCardHTML(c,true)).join('');
   document.getElementById('ccGridFull').innerHTML = DB.cards.map(c=>creditCardHTML(c,true)).join('');
   document.querySelectorAll('[data-edit-card]').forEach(btn=>{
     btn.addEventListener('click', ()=> openCardModal(btn.dataset.editCard));
@@ -1864,9 +1949,16 @@ function renderChartCat(){
     options:{
       indexAxis:'y',
       responsive:true, maintainAspectRatio:false,
+      onClick:(evt, elements)=>{
+        if(elements.length===0) return;
+        const idx = elements[0].index;
+        const cat = entries[idx][0];
+        showCategoryDrilldown(cat);
+      },
+      onHover:(evt, elements)=>{ evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; },
       plugins:{
         legend:{display:false},
-        tooltip:{callbacks:{label:(c)=>{ const v=c.raw; const pct=((v/total)*100).toFixed(1); return `${fmtBRL(v)} (${pct}%)`; }}}
+        tooltip:{callbacks:{label:(c)=>{ const v=c.raw; const pct=((v/total)*100).toFixed(1); return `${fmtBRL(v)} (${pct}%) — clique pra ver os lançamentos`; }}}
       },
       scales:{
         x:{grid:{color:'rgba(255,255,255,0.05)'}, ticks:{callback:(v)=>'R$ '+v}},
@@ -1874,6 +1966,9 @@ function renderChartCat(){
       }
     }
   });
+  if(CURRENT_DRILLDOWN_CATEGORY && byCat[CURRENT_DRILLDOWN_CATEGORY]!==undefined){
+    showCategoryDrilldown(CURRENT_DRILLDOWN_CATEGORY);
+  }
 }
 
 function renderChartInvoices(){
@@ -1947,6 +2042,40 @@ function renderChartReserves(canvasId, chartKey){
       scales:{x:{grid:{display:false}}, y:{grid:{color:'rgba(255,255,255,0.05)'}, ticks:{callback:(v)=>'R$ '+v}}}
     }
   });
+}
+
+let CURRENT_DRILLDOWN_CATEGORY = null;
+function showCategoryDrilldown(category){
+  CURRENT_DRILLDOWN_CATEGORY = category;
+  const el = document.getElementById('categoryDrilldown');
+  if(!el) return;
+  const movs = filteredMovements().length ? filteredMovements() : DB.movements;
+  const items = movs.filter(m=>m.type==='despesa' && m.category===category).sort((a,b)=>b.date.localeCompare(a.date));
+  const total = items.reduce((s,m)=>s+Number(m.amount),0);
+  el.innerHTML = `
+    <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <b style="font-size:13px;">${category} <span style="color:var(--text-dim); font-weight:400;">— ${fmtBRL(total)}</span></b>
+        <button class="icon-btn" id="closeCategoryDrilldown" style="font-size:16px;">✕</button>
+      </div>
+      ${items.length===0 ? `<div class="empty-state">Nenhum gasto nessa categoria (com os filtros atuais).</div>` : `
+      <div class="table-card" style="max-height:260px; overflow-y:auto;">
+        <table>
+          <tbody>
+            ${items.map(m=>`
+              <tr>
+                <td style="width:90px; color:var(--text-dim);">${fmtDate(m.date)}</td>
+                <td>${m.description}</td>
+                <td style="width:90px; color:var(--text-dim);">${m.account}</td>
+                <td style="width:110px; font-weight:700; color:var(--red); text-align:right;">${fmtBRL(m.amount)}</td>
+                <td style="width:40px;"><button class="icon-btn" data-edit-drilldown="${m.id}">${ICONS.edit}</button></td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`}
+    </div>`;
+  document.getElementById('closeCategoryDrilldown').addEventListener('click', ()=>{ el.innerHTML = ''; CURRENT_DRILLDOWN_CATEGORY = null; });
+  el.querySelectorAll('[data-edit-drilldown]').forEach(b=>b.addEventListener('click', ()=>openMovModal(b.dataset.editDrilldown)));
 }
 
 function renderAllCharts(){
@@ -2090,8 +2219,18 @@ function openMovModal(id){
       <div class="field" id="wrap_installment_count" style="display:none;">
         <label>Em quantas vezes?</label>
         <input type="number" id="f_installment_count" min="2" max="24" value="2">
+      </div>
+      <div class="field" id="wrap_recurring" style="display:none;">
+        <label>Isso se repete todo mês?</label>
+        <select id="f_recurring_mode">
+          <option value="nao">Não, foi só dessa vez</option>
+          <option value="sim">Sim, todo mês (assinatura, mensalidade...)</option>
+        </select>
       </div>` : ''}
     </div>
+    <p id="recurring_note" style="display:none; font-size:11.5px; color:var(--text-dim); margin-top:8px;">
+      Isso vai criar um "gasto fixo" com cobrança sempre no dia ${new Date().getDate()} — o app lança sozinho todo mês a partir do mês que vem (acompanhe na aba Gastos Fixos).
+    </p>
     <div class="modal-actions">
       <button class="btn" id="modalCancel">Cancelar</button>
       <button class="btn btn-primary" id="modalSave">Salvar</button>
@@ -2105,6 +2244,10 @@ function openMovModal(id){
     const wrapMode = document.getElementById('wrap_installments');
     const wrapCount = document.getElementById('wrap_installment_count');
     const amountLabel = document.getElementById('f_amount_label');
+    const wrapRecurring = document.getElementById('wrap_recurring');
+    const recurringModeEl = document.getElementById('f_recurring_mode');
+    const recurringNote = document.getElementById('recurring_note');
+    const dateEl = document.getElementById('f_date');
 
     function syncInstallmentUI(){
       const isCreditExpense = payEl.value === 'Crédito' && typeEl.value === 'despesa';
@@ -2113,10 +2256,19 @@ function openMovModal(id){
       const parcelado = isCreditExpense && modeEl.value === 'parcelado';
       wrapCount.style.display = parcelado ? '' : 'none';
       amountLabel.textContent = parcelado ? 'Valor total da compra (R$)' : 'Valor (R$)';
+
+      const isDespesa = typeEl.value === 'despesa';
+      wrapRecurring.style.display = (isDespesa && !parcelado) ? '' : 'none';
+      if(parcelado || !isDespesa){ recurringModeEl.value = 'nao'; }
+      recurringNote.style.display = (wrapRecurring.style.display!=='none' && recurringModeEl.value==='sim') ? '' : 'none';
     }
     payEl.addEventListener('change', syncInstallmentUI);
     typeEl.addEventListener('change', syncInstallmentUI);
     modeEl.addEventListener('change', syncInstallmentUI);
+    recurringModeEl.addEventListener('change', syncInstallmentUI);
+    dateEl.addEventListener('change', ()=>{
+      recurringNote.textContent = `Isso vai criar um "gasto fixo" com cobrança sempre no dia ${new Date(dateEl.value+'T00:00:00').getDate()} — o app lança sozinho todo mês a partir do mês que vem (acompanhe na aba Gastos Fixos).`;
+    });
     syncInstallmentUI();
   }
 
@@ -2167,6 +2319,22 @@ function openMovModal(id){
         const confirmDup = confirm(`Já existe uma movimentação parecida: "${possibleDup.description}" de ${fmtBRL(possibleDup.amount)} em ${fmtDate(possibleDup.date)} na conta ${possibleDup.account}.\n\nIsso pode ser um lançamento duplicado. Quer salvar mesmo assim?`);
         if(!confirmDup) return;
       }
+    }
+
+    const recurringEl = document.getElementById('f_recurring_mode');
+    const isRecurring = !editing && recurringEl && recurringEl.value === 'sim';
+
+    if(isRecurring){
+      const fixedId = uid();
+      DB.movements.push({id:uid(), ...payload, fixedExpenseId:fixedId});
+      DB.fixedExpenses = DB.fixedExpenses || [];
+      DB.fixedExpenses.push({
+        id:fixedId, name:description, category, amount, billingDay:Number(date.split('-')[2]),
+        account, paymentMethod, active:true, autoLaunchFrom: nextCompetencia(competenciaOf(date))
+      });
+      saveDB(DB); closeModal(); renderAll();
+      showToast(`Lançado! "${description}" virou um gasto fixo — vai lançar sozinho todo mês a partir do mês que vem.`);
+      return;
     }
 
     if(editing){ Object.assign(editing, payload); }
@@ -2445,13 +2613,18 @@ function renderFixedExpensesView(){
       <td><span class="pill ${f.active?'green':'gray'}">${f.active?'Ativo':'Pausado'}</span></td>
       <td><div class="row-actions">
         <button class="btn btn-sm" data-launch-fixed="${f.id}" ${jaLancado?'disabled style="opacity:.4; cursor:not-allowed;"':''}>${jaLancado?'Já lançado':'Lançar esse mês'}</button>
-        <button class="icon-btn" data-edit-fixed="${f.id}">${ICONS.edit}</button>
+        <button class="btn btn-sm" data-toggle-fixed="${f.id}">${f.active?'Pausar':'Ativar'}</button>
         <button class="icon-btn" data-del-fixed="${f.id}">${ICONS.trash}</button>
       </div></td>
     </tr>`;
   }).join('');
 
-  tbody.querySelectorAll('[data-edit-fixed]').forEach(b=>b.addEventListener('click', ()=>openFixedExpenseModal(b.dataset.editFixed)));
+  tbody.querySelectorAll('[data-toggle-fixed]').forEach(b=>b.addEventListener('click', ()=>{
+    const f = (DB.fixedExpenses||[]).find(x=>x.id===b.dataset.toggleFixed);
+    if(!f) return;
+    f.active = !f.active;
+    saveDB(DB); renderAll(); showToast(f.active ? 'Gasto fixo reativado.' : 'Gasto fixo pausado.');
+  }));
   tbody.querySelectorAll('[data-del-fixed]').forEach(b=>b.addEventListener('click', ()=>{
     if(confirm('Excluir este gasto fixo?')){
       DB.fixedExpenses = (DB.fixedExpenses||[]).filter(f=>f.id!==b.dataset.delFixed);
@@ -2699,12 +2872,12 @@ function renderSavingsGoalView(){
   container.innerHTML = `<div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px;">${goals.map(goal=>{
     const current = Number(goal.current)||0;
     const pct = clamp((current/goal.target)*100, 0, 100);
-    let deadlineInfo = '';
-    if(goal.deadline){
-      const today = new Date(); const dl = new Date(goal.deadline+'T00:00:00');
-      const monthsLeft = Math.max(1, Math.round((dl-today)/(1000*60*60*24*30)));
-      const perMonth = Math.max(0, (goal.target-current)/monthsLeft);
-      deadlineInfo = `<div style="font-size:11.5px; color:var(--text-dim); margin-top:6px;">Prazo: ${fmtDate(goal.deadline)} — guarde ${fmtBRL(perMonth)}/mês</div>`;
+    const monthly = Number(goal.monthlyTarget)||0;
+    let monthsInfo = '';
+    if(monthly>0){
+      const falta = Math.max(0, goal.target-current);
+      const monthsLeft = falta<=0 ? 0 : Math.ceil(falta/monthly);
+      monthsInfo = `<div style="font-size:11.5px; color:var(--text-dim); margin-top:6px;">Guardando ${fmtBRL(monthly)}/mês → bate a meta em ${monthsLeft===0?'já bateu! 🎉':(monthsLeft+' mes'+(monthsLeft>1?'es':''))}</div>`;
     }
     return `
     <div class="budget-item" style="padding:18px; margin-bottom:0;">
@@ -2717,7 +2890,7 @@ function renderSavingsGoalView(){
       <div style="font-size:19px; font-weight:800; color:var(--green); margin-bottom:8px;">${fmtBRL(current)} <span style="font-size:12px; color:var(--text-dim); font-weight:400;">de ${fmtBRL(goal.target)}</span></div>
       <div class="budget-bar" style="height:10px;"><span style="width:${pct}%; background:linear-gradient(90deg, var(--purple), var(--green));"></span></div>
       <div style="font-size:11.5px; color:var(--text-dim); margin-top:6px;">${pct.toFixed(0)}% alcançado</div>
-      ${deadlineInfo}
+      ${monthsInfo}
     </div>`;
   }).join('')}</div>`;
 
@@ -2733,15 +2906,16 @@ function renderSavingsGoalView(){
 function openSavingsGoalModal(id){
   migrateSavingsGoals();
   const editing = id ? DB.savingsGoals.find(g=>g.id===id) : null;
-  const goal = editing || {name:'', target:'', current:0, deadline:''};
+  const goal = editing || {name:'', target:'', current:0, monthlyTarget:''};
   openModal(`
     <div class="modal-head"><h3>${editing?'Editar':'Nova'} meta de economia</h3><button id="modalClose">&times;</button></div>
     <div class="form-grid">
       <div class="field full"><label>Nome da meta</label><input type="text" id="f_gname" value="${goal.name||''}" placeholder="Ex: Reserva de emergência, Viagem..."></div>
       <div class="field"><label>Valor alvo (R$)</label><input type="number" step="0.01" id="f_gtarget" value="${goal.target||''}"></div>
       <div class="field"><label>Valor já guardado (R$)</label><input type="number" step="0.01" id="f_gcurrent" value="${goal.current||0}"></div>
-      <div class="field full"><label>Prazo (opcional)</label><input type="date" id="f_gdeadline" value="${goal.deadline||''}"></div>
+      <div class="field full"><label>Quanto pretende guardar por mês? (R$)</label><input type="number" step="0.01" id="f_gmonthly" value="${goal.monthlyTarget||''}" placeholder="Ex: 50"></div>
     </div>
+    <p style="font-size:11.5px; color:var(--text-dim); margin-top:4px;">Com esse valor mensal, o app calcula sozinho em quantos meses você bate a meta — sem precisar saber a data exata.</p>
     <div class="modal-actions">
       <button class="btn" id="modalCancel">Cancelar</button>
       <button class="btn btn-primary" id="modalSave">Salvar</button>
@@ -2750,8 +2924,9 @@ function openSavingsGoalModal(id){
   document.getElementById('modalSave').addEventListener('click', ()=>{
     const target = parseFloat(document.getElementById('f_gtarget').value);
     const current = parseFloat(document.getElementById('f_gcurrent').value)||0;
+    const monthlyTarget = parseFloat(document.getElementById('f_gmonthly').value)||0;
     if(isNaN(target) || target<=0){ showToast('Preencha um valor alvo válido.'); return; }
-    const payload = {name:document.getElementById('f_gname').value, target, current, deadline:document.getElementById('f_gdeadline').value};
+    const payload = {name:document.getElementById('f_gname').value, target, current, monthlyTarget};
     if(editing){ Object.assign(editing, payload); }
     else{ DB.savingsGoals.push({id:uid(), ...payload}); }
     saveDB(DB); closeModal(); renderAll(); showToast('Meta salva.');
@@ -2774,6 +2949,7 @@ function openInstallmentModal(id){
       <div class="field"><label>Parcelas restantes</label><input type="number" id="f_remaining" value="${i.remainingInstallments}"></div>
       <div class="field"><label>Data da compra</label><input type="date" id="f_pdate" value="${i.purchaseDate}"></div>
     </div>
+    ${!editing ? `<p style="font-size:11.5px; color:var(--text-dim); margin-top:8px;">Este mês não lança nada automaticamente (você já deve ter ajustado a fatura atual manualmente, se essa parcela já está em andamento). A partir do <b>mês que vem</b>, o app lança sozinho a parcela em Movimentações, na data de cobrança, e desconta 1 de "parcelas restantes" a cada lançamento.</p>` : ''}
     <div class="modal-actions">
       <button class="btn" id="modalCancel">Cancelar</button>
       <button class="btn btn-primary" id="modalSave">Salvar</button>
@@ -2791,7 +2967,9 @@ function openInstallmentModal(id){
       purchaseDate: document.getElementById('f_pdate').value,
     };
     if(editing){ Object.assign(editing, payload); }
-    else{ DB.installments.push({id:uid(), ...payload}); }
+    else{
+      DB.installments.push({id:uid(), ...payload, autoLaunchFrom: nextCompetencia(currentCompetencia())});
+    }
     saveDB(DB); closeModal(); renderAll(); showToast('Parcelamento salvo.');
   });
 }
@@ -2959,18 +3137,8 @@ document.getElementById('btnRefresh').addEventListener('click', async ()=>{
   }
   btn.disabled = false; btn.style.opacity = '1';
 });
-document.getElementById('btnSaveCaixa').addEventListener('click', ()=>{
-  const val = parseFloat(document.getElementById('f_saldo_caixa').value)||0;
-  freezeAllBaselines();
-  DB.accountBalancesAsOf = DB.accountBalancesAsOf || {};
-  DB.accountBalances['Caixa'] = val;
-  DB.accountBalancesAsOf['Caixa'] = todayISO();
-  finalizeBaselineReset();
-  saveDB(DB); renderAll(); showToast('Saldo da Caixa atualizado.');
-});
 document.getElementById('btnAddEvent').addEventListener('click', ()=>openEventModal(null));
 document.getElementById('btnAddInstallment').addEventListener('click', ()=>openInstallmentModal(null));
-document.getElementById('btnAddFixed').addEventListener('click', ()=>openFixedExpenseModal(null));
 document.getElementById('btnAddBudget').addEventListener('click', ()=>openBudgetModal(null));
 document.getElementById('btnEditGoal').addEventListener('click', ()=>openSavingsGoalModal());
 document.getElementById('calPrevMonth').addEventListener('click', ()=>{ CALENDAR_OFFSET--; renderCalendarView(); });
@@ -2982,8 +3150,7 @@ document.getElementById('btnAddReserve').addEventListener('click', ()=>openReser
    RENDER ALL
    ============================================================ */
 function renderSettingsView(){
-  const el = document.getElementById('f_saldo_caixa');
-  if(el) el.value = getAccountBalance('Caixa');
+  // sem campos dinâmicos por enquanto
 }
 
 function safeRun(fn, label){
@@ -3021,6 +3188,8 @@ async function init(){
   try{
     DB = await loadDB();
     if(migrateBaselines()){ await saveDB(DB); }
+    const launchedCount = autoLaunchRecurring();
+    if(launchedCount > 0){ await saveDB(DB); }
   }catch(e){
     console.error('Erro crítico ao carregar dados:', e);
     document.getElementById('loadingOverlay').style.display = 'flex';
