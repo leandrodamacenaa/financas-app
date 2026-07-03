@@ -135,6 +135,7 @@ button{cursor:pointer; border:none; background:none; color:inherit;}
 .dash-side{position:sticky; top:76px; display:flex; flex-direction:column; gap:12px;}
 .dash-side .side-panel-card{
   background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:16px;
+  overflow-wrap:break-word; word-break:break-word; min-width:0;
 }
 .dash-side .side-panel-card h4{font-size:12.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-dim); margin-bottom:10px;}
 @media(max-width:1300px){
@@ -249,8 +250,8 @@ button{cursor:pointer; border:none; background:none; color:inherit;}
 .credit-card .cc-name b{font-size:15px; font-weight:700;}
 .cc-brand-dot{width:10px; height:10px; border-radius:50%; box-shadow:0 0 8px currentColor;}
 .cc-label{font-size:10px; letter-spacing:.05em; color:var(--text-dimmer); font-weight:700; text-transform:uppercase;}
-.cc-value-sm{font-size:14px; font-weight:700; margin-top:2px; margin-bottom:6px;}
-.cc-value-md{font-size:18px; font-weight:800; margin-top:2px;}
+.cc-value-sm{font-size:14px; font-weight:700; margin-top:2px; margin-bottom:6px; overflow-wrap:break-word; word-break:break-word;}
+.cc-value-md{font-size:18px; font-weight:800; margin-top:2px; overflow-wrap:break-word; word-break:break-word;}
 .cc-sub{font-size:10.5px; color:var(--text-dim); margin-top:1px;}
 .cc-divider{height:1px; background:var(--border); margin:8px 0;}
 .cc-body{display:flex; align-items:center; gap:16px; margin-top:4px;}
@@ -663,13 +664,10 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
       <div class="kpi-grid" id="kpiMain"></div>
       <div class="kpi-grid secondary" id="kpiSecondary"></div>
 
-      <div class="section-title"><div><h2>Alertas automáticos</h2><div class="sub">Fique de olho nesses pontos</div></div></div>
-      <div class="alerts-panel" id="alertsPanel"></div>
-
       <div class="dashboard-grid">
         <div class="dash-main">
           <div class="section-title">
-            <div><h2>Central dos Cartões</h2><div class="sub">Resumo rápido — veja os detalhes completos na aba Cartões</div></div>
+            <div><h2>Central dos Cartões</h2><div class="sub">Visão completa de cada cartão de crédito</div></div>
           </div>
           <div class="cards-central">
             <div class="cc-header">
@@ -697,6 +695,9 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
             <div class="chart-card"><h4>Próximos vencimentos</h4><div id="upcomingList"></div></div>
             <div class="chart-card"><h4>Últimas movimentações</h4><div id="recentMovList"></div></div>
           </div>
+
+          <div class="section-title"><div><h2>Alertas automáticos</h2><div class="sub">Fique de olho nesses pontos</div></div></div>
+          <div class="alerts-panel" id="alertsPanel"></div>
         </div>
 
         <aside class="dash-side">
