@@ -587,6 +587,21 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
       <div id="invoicesContainer"></div>
     </section>
 
+    <!-- ================= GASTOS FIXOS ================= -->
+    <section class="view" id="view-fixed">
+      <div class="section-title">
+        <div><h2>Gastos Fixos</h2><div class="sub">Assinaturas e mensalidades recorrentes (Spotify, plano de celular, etc.)</div></div>
+        <button class="btn btn-primary" id="btnAddFixed">+ Novo gasto fixo</button>
+      </div>
+      <div class="kpi-grid" id="fixedKpi" style="grid-template-columns:repeat(4,1fr); margin-bottom:20px;"></div>
+      <div class="table-card">
+        <table>
+          <thead><tr><th>Nome</th><th>Categoria</th><th>Valor</th><th>Dia da cobrança</th><th>Conta/Cartão</th><th>Ativo</th><th></th></tr></thead>
+          <tbody id="fixedTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+
     <!-- ================= CARTÕES ================= -->
     <section class="view" id="view-cards">
       <div class="section-title">
@@ -794,7 +809,13 @@ function seedData(){
   // Saldo atual de cada conta (mantido manualmente, como as faturas dos cartões)
   const accountBalances = {'Nubank':2926.98, 'Caixa':700, 'PicPay':0.58, 'Neon':100, 'Mercado Pago':89.73};
 
-  return {movements, events, cards, installments, reserves, accountBalances, meta:{createdAt:new Date().toISOString()}};
+  const fixedExpenses = [
+    {id:uid(), name:'Spotify', category:'Assinaturas', amount:21.90, billingDay:10, account:'Neon', paymentMethod:'Crédito', active:true},
+    {id:uid(), name:'Claude Code', category:'Tecnologia', amount:100, billingDay:5, account:'Nubank', paymentMethod:'Crédito', active:true},
+    {id:uid(), name:'Plano de celular', category:'Assinaturas', amount:49.90, billingDay:15, account:'Nubank', paymentMethod:'Crédito', active:true},
+  ];
+
+  return {movements, events, cards, installments, reserves, accountBalances, fixedExpenses, meta:{createdAt:new Date().toISOString()}};
 }
 
 /* ============================================================
@@ -863,6 +884,7 @@ const NAV_ITEMS = [
   {id:'dashboard', label:'Dashboard', icon:'dashboard'},
   {id:'mov', label:'Movimentações', icon:'mov'},
   {id:'invoices', label:'Faturas', icon:'cards'},
+  {id:'fixed', label:'Gastos Fixos', icon:'installments'},
   {id:'events', label:'Eventos', icon:'events'},
   {id:'cards', label:'Cartões', icon:'cards'},
   {id:'installments', label:'Parcelamentos', icon:'installments'},
@@ -996,6 +1018,12 @@ function installmentsTotals(){
   });
   return {active, monthlyCommitted, remainingTotal, biggest};
 }
+function fixedExpensesTotals(){
+  const list = DB.fixedExpenses || [];
+  const active = list.filter(f=>f.active);
+  const monthlyTotal = active.reduce((s,f)=>s+Number(f.amount),0);
+  return {list, active, monthlyTotal};
+}
 function eventsTotals(){
   const total = DB.events.length;
   const paid = DB.events.filter(e=>e.paid);
@@ -1107,9 +1135,10 @@ function renderKPIs(){
 
   const reserves = reservesTotals();
   const instT = installmentsTotals();
+  const fixedT = fixedExpensesTotals();
   const saldoNu = saldoNubank();
   const saldoCx = saldoCaixa();
-  const disponivelReal = totalAccountBalances() + reserves.total - totalCurrent - totalNext - instT.monthlyCommitted;
+  const disponivelReal = totalAccountBalances() + reserves.total - totalCurrent - totalNext - instT.monthlyCommitted - fixedT.monthlyTotal;
 
   document.getElementById('kpiSecondary').innerHTML = [
     kpiCard({icon:'dashboard',color:'purple',title:'Saldo Nubank', value:fmtBRL(saldoNu)}),
@@ -1365,7 +1394,8 @@ function computeAlerts(){
   const reserves = reservesTotals();
   const t = cardTotals();
   const instT = installmentsTotals();
-  const disponivelReal = totalAccountBalances()+reserves.total - t.totalCurrent - t.totalNext - instT.monthlyCommitted;
+  const fixedT = fixedExpensesTotals();
+  const disponivelReal = totalAccountBalances()+reserves.total - t.totalCurrent - t.totalNext - instT.monthlyCommitted - fixedT.monthlyTotal;
   if(disponivelReal < 0) alerts.push({level:'crit', title:'Saldo disponível real negativo', desc:`Faltam ${fmtBRL(Math.abs(disponivelReal))} para cobrir compromissos.`});
 
   instT.active.forEach(i=>{
@@ -1752,6 +1782,98 @@ function renderInstallmentsView(){
   }));
 }
 
+/* ============================================================
+   GASTOS FIXOS
+   ============================================================ */
+function renderFixedExpensesView(){
+  const t = fixedExpensesTotals();
+  document.getElementById('fixedKpi').innerHTML = [
+    kpiCard({icon:'installments',color:'purple',title:'Gastos fixos ativos', value:t.active.length}),
+    kpiCard({icon:'installments',color:'red',title:'Compromisso mensal', value:fmtBRL(t.monthlyTotal)}),
+    kpiCard({icon:'installments',color:'blue',title:'Total cadastrado', value:t.list.length}),
+    kpiCard({icon:'installments',color:'amber',title:'Próxima cobrança', value: (()=>{
+      const upcoming = t.active.map(f=>f.billingDay).filter(d=>d>=new Date().getDate()).sort((a,b)=>a-b);
+      return upcoming.length ? `dia ${upcoming[0]}` : (t.active.length ? `dia ${Math.min(...t.active.map(f=>f.billingDay))} (próx. mês)` : '—');
+    })()}),
+  ].join('');
+
+  const tbody = document.getElementById('fixedTableBody');
+  const list = t.list;
+  if(list.length===0){ tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">Nenhum gasto fixo cadastrado ainda.</div></td></tr>`; return; }
+  tbody.innerHTML = list.map(f=>`
+    <tr>
+      <td style="font-weight:700;">${f.name}</td>
+      <td>${f.category}</td>
+      <td style="color:var(--red); font-weight:700;">${fmtBRL(f.amount)}</td>
+      <td>dia ${f.billingDay}</td>
+      <td>${f.account} · ${f.paymentMethod}</td>
+      <td><span class="pill ${f.active?'green':'gray'}">${f.active?'Ativo':'Pausado'}</span></td>
+      <td><div class="row-actions">
+        <button class="btn btn-sm" data-launch-fixed="${f.id}">Lançar esse mês</button>
+        <button class="icon-btn" data-edit-fixed="${f.id}">${ICONS.edit}</button>
+        <button class="icon-btn" data-del-fixed="${f.id}">${ICONS.trash}</button>
+      </div></td>
+    </tr>`).join('');
+
+  tbody.querySelectorAll('[data-edit-fixed]').forEach(b=>b.addEventListener('click', ()=>openFixedExpenseModal(b.dataset.editFixed)));
+  tbody.querySelectorAll('[data-del-fixed]').forEach(b=>b.addEventListener('click', ()=>{
+    if(confirm('Excluir este gasto fixo?')){
+      DB.fixedExpenses = (DB.fixedExpenses||[]).filter(f=>f.id!==b.dataset.delFixed);
+      saveDB(DB); renderAll(); showToast('Gasto fixo excluído.');
+    }
+  }));
+  tbody.querySelectorAll('[data-launch-fixed]').forEach(b=>b.addEventListener('click', ()=>{
+    const f = (DB.fixedExpenses||[]).find(x=>x.id===b.dataset.launchFixed);
+    if(!f) return;
+    const today = new Date();
+    const day = Math.min(f.billingDay, new Date(today.getFullYear(), today.getMonth()+1, 0).getDate());
+    const date = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    DB.movements.push({
+      id:uid(), date, type:'despesa', category:f.category, account:f.account, paymentMethod:f.paymentMethod,
+      description:f.name, amount:Number(f.amount), competencia:competenciaOf(date)
+    });
+    saveDB(DB); renderAll();
+    showToast(`${f.name} lançado em ${fmtDate(date)}.`);
+  }));
+}
+
+function openFixedExpenseModal(id){
+  const editing = id ? (DB.fixedExpenses||[]).find(f=>f.id===id) : null;
+  const f = editing || {name:'', category:CATEGORIES[0], amount:'', billingDay:5, account:ACCOUNTS[0], paymentMethod:PAYMENT_METHODS[0], active:true};
+  openModal(`
+    <div class="modal-head"><h3>${editing?'Editar':'Novo'} gasto fixo</h3><button id="modalClose">&times;</button></div>
+    <div class="form-grid">
+      <div class="field full"><label>Nome</label><input type="text" id="f_name" value="${f.name}" placeholder="Ex: Spotify, plano de celular..."></div>
+      <div class="field"><label>Categoria</label><select id="f_category">${CATEGORIES.map(c=>`<option ${c===f.category?'selected':''}>${c}</option>`).join('')}</select></div>
+      <div class="field"><label>Valor (R$)</label><input type="number" step="0.01" id="f_amount" value="${f.amount}"></div>
+      <div class="field"><label>Dia da cobrança</label><input type="number" min="1" max="31" id="f_billingday" value="${f.billingDay}"></div>
+      <div class="field"><label>Conta/Cartão</label><select id="f_account">${ACCOUNTS.map(a=>`<option ${a===f.account?'selected':''}>${a}</option>`).join('')}</select></div>
+      <div class="field"><label>Forma de pagamento</label><select id="f_pay">${PAYMENT_METHODS.map(p=>`<option ${p===f.paymentMethod?'selected':''}>${p}</option>`).join('')}</select></div>
+      <div class="field"><label>Status</label><select id="f_active"><option value="sim" ${f.active?'selected':''}>Ativo</option><option value="nao" ${!f.active?'selected':''}>Pausado</option></select></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" id="modalCancel">Cancelar</button>
+      <button class="btn btn-primary" id="modalSave">Salvar</button>
+    </div>
+  `);
+  document.getElementById('modalSave').addEventListener('click', ()=>{
+    const name = document.getElementById('f_name').value.trim();
+    const amount = parseFloat(document.getElementById('f_amount').value);
+    if(!name || isNaN(amount)){ showToast('Preencha nome e valor.'); return; }
+    const payload = {
+      name, category:document.getElementById('f_category').value, amount,
+      billingDay: clamp(parseInt(document.getElementById('f_billingday').value)||1, 1, 31),
+      account: document.getElementById('f_account').value, paymentMethod: document.getElementById('f_pay').value,
+      active: document.getElementById('f_active').value === 'sim'
+    };
+    DB.fixedExpenses = DB.fixedExpenses || [];
+    if(editing){ Object.assign(editing, payload); }
+    else{ DB.fixedExpenses.push({id:uid(), ...payload}); }
+    saveDB(DB); closeModal(); renderAll(); showToast('Gasto fixo salvo.');
+  });
+}
+
+
 function openInstallmentModal(id){
   const editing = id ? DB.installments.find(i=>i.id===id) : null;
   const i = editing || {purchase:'', category:CATEGORIES[0], card:CARD_NAMES[0], totalValue:'', installmentsCount:1, installmentValue:'', purchaseDate:todayISO(), remainingInstallments:1};
@@ -1943,6 +2065,7 @@ document.getElementById('btnSaveCaixa').addEventListener('click', ()=>{
 });
 document.getElementById('btnAddEvent').addEventListener('click', ()=>openEventModal(null));
 document.getElementById('btnAddInstallment').addEventListener('click', ()=>openInstallmentModal(null));
+document.getElementById('btnAddFixed').addEventListener('click', ()=>openFixedExpenseModal(null));
 document.getElementById('btnAddReserve').addEventListener('click', ()=>openReserveModal(null));
 
 /* ============================================================
@@ -1968,6 +2091,7 @@ function renderAll(){
   safeRun(renderInvoicesView, 'faturas por cartão');
   safeRun(renderEventsView, 'eventos');
   safeRun(renderInstallmentsView, 'parcelamentos');
+  safeRun(renderFixedExpensesView, 'gastos fixos');
   safeRun(renderReservesView, 'reservas');
   safeRun(renderSettingsView, 'configurações');
   safeRun(updateLastUpdateLabel, 'data de atualização');
