@@ -1223,8 +1223,12 @@ function last12Competencias(){
   }
   return arr;
 }
+function futureInstallmentCommitment(cardName){
+  return (DB.installments||[]).filter(i=>i.card===cardName && i.remainingInstallments>0)
+    .reduce((s,i)=>s+Number(i.installmentValue)*Number(i.remainingInstallments), 0);
+}
 function getAvailableLimit(c){
-  return Math.round((Number(c.limit) - getComputedInvoice(c))*100)/100;
+  return Math.round((Number(c.limit) - getComputedInvoice(c) - futureInstallmentCommitment(c.name))*100)/100;
 }
 function cardTotals(){
   const totalCurrent = DB.cards.reduce((s,c)=>s+getComputedInvoice(c),0);
@@ -1684,7 +1688,10 @@ function renderInvoicesView(){
     <div class="chart-card" style="margin-bottom:16px;">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
         <h4>${c.name} <span style="color:var(--text-dim); font-weight:400;">— vencimento dia ${c.dueDay}</span></h4>
-        <div style="font-size:13px;"><span style="color:var(--text-dim);">Fatura atual (calculada): </span><b style="color:var(--red);">${fmtBRL(invoice)}</b></div>
+        <div style="font-size:13px; display:flex; align-items:center; gap:10px;">
+          <span><span style="color:var(--text-dim);">Fatura atual (calculada): </span><b style="color:var(--red);">${fmtBRL(invoice)}</b></span>
+          <button class="btn btn-sm" data-future-invoices="${c.name}">Ver faturas futuras</button>
+        </div>
       </div>
       <p style="font-size:11.5px; color:var(--text-dim); margin:6px 0 10px;">
         Ponto de partida de ${fmtDate(asOf)}: ${fmtBRL(baseline)}${items.length?` + ${items.length} lançamento(s) em crédito desde então.`:' (nenhum lançamento novo ainda).'}
@@ -1700,6 +1707,59 @@ function renderInvoicesView(){
       </div>`}
     </div>`;
   }).join('');
+
+  container.querySelectorAll('[data-future-invoices]').forEach(btn=>{
+    btn.addEventListener('click', ()=>openFutureInvoicesModal(btn.dataset.futureInvoices));
+  });
+}
+
+function projectFutureInvoices(cardName, monthsAhead){
+  const result = [];
+  const today = new Date();
+  for(let k=1; k<=monthsAhead; k++){
+    const d = new Date(today.getFullYear(), today.getMonth()+k, 1);
+    const label = `${MONTH_NAMES_FULL[d.getMonth()]} de ${d.getFullYear()}`;
+    const items = [];
+    (DB.installments||[]).filter(i=>i.card===cardName).forEach(i=>{
+      if(k <= Number(i.remainingInstallments)){
+        items.push({name:i.purchase, value:Number(i.installmentValue)});
+      }
+    });
+    (DB.fixedExpenses||[]).filter(f=>f.account===cardName && f.paymentMethod==='Crédito' && f.active).forEach(f=>{
+      items.push({name:f.name, value:Number(f.amount)});
+    });
+    const total = items.reduce((s,it)=>s+it.value,0);
+    result.push({label, items, total});
+  }
+  return result;
+}
+
+function openFutureInvoicesModal(cardName){
+  const c = DB.cards.find(x=>x.name===cardName);
+  if(!c) return;
+  const maxInstallmentMonths = Math.max(0, ...((DB.installments||[]).filter(i=>i.card===cardName).map(i=>Number(i.remainingInstallments)||0)));
+  const monthsAhead = Math.max(3, Math.min(24, maxInstallmentMonths));
+  const projection = projectFutureInvoices(cardName, monthsAhead);
+  const futureCommit = futureInstallmentCommitment(cardName);
+
+  openModal(`
+    <div class="modal-head"><h3>Faturas futuras — ${cardName}</h3><button id="modalClose">&times;</button></div>
+    <p style="font-size:12px; color:var(--text-dim); margin-bottom:12px;">
+      Projeção com base nos parcelamentos ativos e gastos fixos em crédito neste cartão.
+      Total ainda travado no limite por parcelamentos: <b style="color:var(--amber);">${fmtBRL(futureCommit)}</b>.
+    </p>
+    <div style="max-height:420px; overflow-y:auto; display:flex; flex-direction:column; gap:10px;">
+      ${projection.map(p=>`
+        <div class="budget-item" style="margin-bottom:0;">
+          <div class="bi-top"><b>${p.label}</b><b style="color:var(--red);">${fmtBRL(p.total)}</b></div>
+          ${p.items.length===0 ? `<div style="font-size:12px; color:var(--text-dim);">Nada previsto — fatura deve fechar em R$ 0,00, se não houver novos gastos.</div>` :
+            p.items.map(it=>`<div style="display:flex; justify-content:space-between; font-size:12px; padding:3px 0; color:var(--text-dim);"><span>${it.name}</span><span>${fmtBRL(it.value)}</span></div>`).join('')}
+        </div>`).join('')}
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="modalCancel">Fechar</button>
+    </div>
+  `);
 }
 
 /* ============================================================
