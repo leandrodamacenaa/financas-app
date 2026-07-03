@@ -995,10 +995,10 @@ function seedData(){
   // Fatura atual e próxima fatura não constavam na planilha — comece em 0 e edite
   // clicando no lápis de cada cartão (Central dos Cartões ou aba Cartões).
   const cards = [
-    {name:'Nubank', limit:3567.10, availableLimit:12.49, closingDay:6, dueDay:15, currentInvoice:727.81, nextInvoice:0},
-    {name:'PicPay', limit:3510, availableLimit:120.00, closingDay:7, dueDay:15, currentInvoice:997.62, nextInvoice:0},
-    {name:'Neon', limit:91.82, availableLimit:91.82, closingDay:8, dueDay:13, currentInvoice:0, nextInvoice:0},
-    {name:'Mercado Pago', limit:2766.46, availableLimit:1688.65, closingDay:12, dueDay:17, currentInvoice:1077.81, nextInvoice:0},
+    {name:'Nubank', limit:3567.10, availableLimit:12.49, closingDay:6, dueDay:15, currentInvoice:727.81, nextInvoice:0, invoiceBaselineDate:todayISO()},
+    {name:'PicPay', limit:3510, availableLimit:120.00, closingDay:7, dueDay:15, currentInvoice:997.62, nextInvoice:0, invoiceBaselineDate:todayISO()},
+    {name:'Neon', limit:91.82, availableLimit:91.82, closingDay:8, dueDay:13, currentInvoice:0, nextInvoice:0, invoiceBaselineDate:todayISO()},
+    {name:'Mercado Pago', limit:2766.46, availableLimit:1688.65, closingDay:12, dueDay:17, currentInvoice:1077.81, nextInvoice:0, invoiceBaselineDate:todayISO()},
   ];
 
   const installments = [
@@ -1011,8 +1011,10 @@ function seedData(){
     {id:uid(), date:'2026-07-01', institution:'Neon', type:'Reserva Automática', entrada:10, saida:0, saldo:110},
   ];
 
-  // Saldo atual de cada conta (mantido manualmente, como as faturas dos cartões)
+  // Saldo atual de cada conta — ponto de partida a partir de hoje; lançamentos futuros somam/subtraem sozinhos
   const accountBalances = {'Nubank':2926.98, 'Caixa':700, 'PicPay':0.58, 'Neon':100, 'Mercado Pago':89.73};
+  const todayStr = todayISO();
+  const accountBalancesAsOf = {'Nubank':todayStr, 'Caixa':todayStr, 'PicPay':todayStr, 'Neon':todayStr, 'Mercado Pago':todayStr};
 
   const fixedExpenses = [
     {id:uid(), name:'Spotify', category:'Assinaturas', amount:21.90, billingDay:10, account:'Neon', paymentMethod:'Crédito', active:true},
@@ -1025,7 +1027,7 @@ function seedData(){
     {id:uid(), name:'Reserva de emergência', target:5000, current:reserves.reduce((s,r)=>s+Number(r.entrada)-Number(r.saida),0), deadline:''},
   ];
 
-  return {movements, events, cards, installments, reserves, accountBalances, fixedExpenses, budgets, savingsGoals, meta:{createdAt:new Date().toISOString()}};
+  return {movements, events, cards, installments, reserves, accountBalances, accountBalancesAsOf, fixedExpenses, budgets, savingsGoals, meta:{createdAt:new Date().toISOString()}};
 }
 
 /* ============================================================
@@ -1222,10 +1224,10 @@ function last12Competencias(){
   return arr;
 }
 function getAvailableLimit(c){
-  return c.availableLimit !== undefined ? Number(c.availableLimit) : Math.max(0, Number(c.limit)-Number(c.currentInvoice));
+  return Math.round((Number(c.limit) - getComputedInvoice(c))*100)/100;
 }
 function cardTotals(){
-  const totalCurrent = DB.cards.reduce((s,c)=>s+Number(c.currentInvoice),0);
+  const totalCurrent = DB.cards.reduce((s,c)=>s+getComputedInvoice(c),0);
   const totalNext = DB.cards.reduce((s,c)=>s+Number(c.nextInvoice),0);
   const totalLimit = DB.cards.reduce((s,c)=>s+Number(c.limit),0);
   const totalAvail = DB.cards.reduce((s,c)=>s+getAvailableLimit(c),0);
@@ -1272,12 +1274,62 @@ function eventsTotals(){
   const last = [...DB.events].sort((a,b)=>b.date.localeCompare(a.date))[0];
   return {total, paidCount:paid.length, pendingCount:pending.length, received, toReceive, last};
 }
+function migrateBaselines(){
+  // Primeira vez que essa versão roda: os valores manuais atuais viram o "ponto de
+  // partida", e as movimentações que já existiam nesse momento ficam marcadas como
+  // "já contabilizadas" (não entram de novo na soma) — funciona mesmo se alguma
+  // movimentação já cadastrada tiver data futura (ex: parcela do mês que vem).
+  let changed = false;
+  DB.accountBalances = DB.accountBalances || {};
+  DB.accountBalancesAsOf = DB.accountBalancesAsOf || {};
+  DB.baselineExcludedIds = DB.baselineExcludedIds || [];
+  ['Nubank','Caixa','PicPay','Neon','Mercado Pago'].forEach(name=>{
+    if(!DB.accountBalancesAsOf[name]){ DB.accountBalancesAsOf[name] = todayISO(); changed = true; }
+    if(DB.accountBalances[name] === undefined){ DB.accountBalances[name] = 0; changed = true; }
+  });
+  DB.cards.forEach(c=>{
+    if(!c.invoiceBaselineDate){ c.invoiceBaselineDate = todayISO(); changed = true; }
+    if(c.currentInvoice === undefined){ c.currentInvoice = 0; changed = true; }
+  });
+  if(!DB.baselinesInitialized){
+    DB.baselineExcludedIds = DB.movements.map(m=>m.id);
+    DB.baselinesInitialized = true;
+    changed = true;
+  }
+  return changed;
+}
+function freezeAllBaselines(){
+  // Congela o valor calculado de CADA cartão/conta na baseline dele, sem perder nada,
+  // antes de "esquecer" as movimentações já contadas.
+  DB.cards.forEach(c2=>{ c2.currentInvoice = getComputedInvoice(c2); });
+  DB.accountBalances = DB.accountBalances || {};
+  ['Nubank','Caixa','PicPay','Neon','Mercado Pago'].forEach(name=>{
+    DB.accountBalances[name] = getAccountBalance(name);
+  });
+}
+function finalizeBaselineReset(){
+  DB.baselineExcludedIds = DB.movements.map(m=>m.id);
+}
+
 function getAccountBalance(name){
-  return (DB.accountBalances && DB.accountBalances[name]) || 0;
+  const baseline = (DB.accountBalances && DB.accountBalances[name]) || 0;
+  const excluded = DB.baselineExcludedIds || [];
+  const delta = DB.movements
+    .filter(m=> m.account===name && !excluded.includes(m.id) && (m.type==='receita' || m.paymentMethod!=='Crédito'))
+    .reduce((s,m)=> s + (m.type==='receita' ? Number(m.amount) : -Number(m.amount)), 0);
+  return Math.round((baseline + delta)*100)/100;
 }
 function totalAccountBalances(){
   const names = ['Nubank','Caixa','PicPay','Neon','Mercado Pago'];
   return names.reduce((s,n)=>s+getAccountBalance(n), 0);
+}
+function getComputedInvoice(c){
+  const baseline = Number(c.currentInvoice)||0;
+  const excluded = DB.baselineExcludedIds || [];
+  const delta = DB.movements
+    .filter(m=> m.account===c.name && m.paymentMethod==='Crédito' && m.type==='despesa' && !excluded.includes(m.id))
+    .reduce((s,m)=> s + Number(m.amount), 0);
+  return Math.round((baseline + delta)*100)/100;
 }
 function saldoNubank(){
   // apenas o saldo da conta em si (as reservas/caixinhas já aparecem separadas no card "Total em reservas")
@@ -1365,8 +1417,9 @@ function renderUpcomingList(){
   if(!el) return;
   const items = [];
   DB.cards.forEach(c=>{
-    if(Number(c.currentInvoice)>0){
-      items.push({name:`Fatura ${c.name}`, value:c.currentInvoice, days:daysUntilDay(c.dueDay), icon:cardBadge(c.name,26)});
+    const inv = getComputedInvoice(c);
+    if(inv>0){
+      items.push({name:`Fatura ${c.name}`, value:inv, days:daysUntilDay(c.dueDay), icon:cardBadge(c.name,26)});
     }
   });
   (DB.fixedExpenses||[]).filter(f=>f.active).forEach(f=>{
@@ -1552,6 +1605,7 @@ function ringSVG(pct, color){
 
 function creditCardHTML(c, withActions){
   const avail = getAvailableLimit(c);
+  const invoice = getComputedInvoice(c);
   const pct = clamp(((Number(c.limit)-avail)/Number(c.limit))*100,0,100);
   const color = CARD_COLORS[c.name] || '#9b6bff';
   return `
@@ -1564,7 +1618,7 @@ function creditCardHTML(c, withActions){
       </div>
       <div class="cc-facts">
         <div class="row"><span>Saldo da conta</span><b>${fmtBRL(getAccountBalance(c.name))}</b></div>
-        <div class="row"><span>Fatura atual</span><b>${fmtBRL(c.currentInvoice)}</b></div>
+        <div class="row"><span>Fatura atual</span><b>${fmtBRL(invoice)}</b></div>
         <div class="row"><span>Próxima fatura</span><b>${fmtBRL(c.nextInvoice)}</b></div>
         <div class="row"><span>Limite</span><b>${fmtBRL(c.limit)}</b></div>
         <div class="row"><span>Disponível</span><b>${fmtBRL(avail)}</b></div>
@@ -1572,7 +1626,7 @@ function creditCardHTML(c, withActions){
       </div>
     </div>
     ${withActions ? `<div class="cc-actions">
-      <button class="btn btn-sm" data-pay-card="${c.name}" ${Number(c.currentInvoice)<=0 ? 'disabled style="opacity:.4; cursor:not-allowed;"' : ''}>Pagar fatura</button>
+      <button class="btn btn-sm" data-pay-card="${c.name}" ${invoice<=0 ? 'disabled style="opacity:.4; cursor:not-allowed;"' : ''}>Pagar fatura</button>
       <button class="icon-btn" data-edit-card="${c.name}">${ICONS.edit}</button>
     </div>` : ''}
   </div>`;
@@ -1591,7 +1645,7 @@ function creditCardCompactHTML(c){
       </div>
       <div>
         <div style="font-weight:700; font-size:13px;">${c.name}</div>
-        <div style="font-size:11px; color:var(--text-dim);">Fatura: <b style="color:var(--text);">${fmtBRL(c.currentInvoice)}</b></div>
+        <div style="font-size:11px; color:var(--text-dim);">Fatura: <b style="color:var(--text);">${fmtBRL(getComputedInvoice(c))}</b></div>
       </div>
     </div>
   </div>`;
@@ -1620,21 +1674,22 @@ function renderCardsCentral(){
 
 function renderInvoicesView(){
   const container = document.getElementById('invoicesContainer');
+  const excluded = DB.baselineExcludedIds || [];
   container.innerHTML = DB.cards.map(c=>{
-    const items = DB.movements.filter(m=>m.account===c.name && m.paymentMethod==='Crédito').sort((a,b)=>b.date.localeCompare(a.date));
-    const subtotal = items.reduce((s,m)=>s+Number(m.amount),0);
-    const diff = subtotal - Number(c.currentInvoice);
+    const asOf = c.invoiceBaselineDate || '0000-01-01';
+    const items = DB.movements.filter(m=>m.account===c.name && m.paymentMethod==='Crédito' && m.type==='despesa' && !excluded.includes(m.id)).sort((a,b)=>b.date.localeCompare(a.date));
+    const invoice = getComputedInvoice(c);
+    const baseline = Number(c.currentInvoice)||0;
     return `
     <div class="chart-card" style="margin-bottom:16px;">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
         <h4>${c.name} <span style="color:var(--text-dim); font-weight:400;">— vencimento dia ${c.dueDay}</span></h4>
-        <div style="font-size:13px; display:flex; align-items:center; gap:10px;">
-          <span><span style="color:var(--text-dim);">Fatura atual: </span><b>${fmtBRL(c.currentInvoice)}</b></span>
-          <span><span style="color:var(--text-dim);">Soma dos lançamentos: </span><b style="color:${Math.abs(diff)<0.01?'var(--green)':'var(--amber)'}">${fmtBRL(subtotal)}</b></span>
-          ${items.length>0 && Math.abs(diff)>=0.01 ? `<button class="btn btn-sm" data-sync-invoice="${c.name}">Usar esta soma como fatura</button>` : ''}
-        </div>
+        <div style="font-size:13px;"><span style="color:var(--text-dim);">Fatura atual (calculada): </span><b style="color:var(--red);">${fmtBRL(invoice)}</b></div>
       </div>
-      ${items.length===0 ? `<div class="empty-state">Nenhuma movimentação em crédito lançada para este cartão ainda. Use "+ Nova movimentação" com forma de pagamento Crédito.</div>` : `
+      <p style="font-size:11.5px; color:var(--text-dim); margin:6px 0 10px;">
+        Ponto de partida de ${fmtDate(asOf)}: ${fmtBRL(baseline)}${items.length?` + ${items.length} lançamento(s) em crédito desde então.`:' (nenhum lançamento novo ainda).'}
+      </p>
+      ${items.length===0 ? `<div class="empty-state">Nenhuma movimentação em crédito lançada para este cartão desde ${fmtDate(asOf)}. Lance em "+ Nova movimentação" com forma de pagamento Crédito, e a fatura atualiza sozinha.</div>` : `
       <div class="table-card" style="margin-top:6px;">
         <table>
           <thead><tr><th>Data</th><th>Categoria</th><th>Descrição</th><th>Valor</th></tr></thead>
@@ -1643,23 +1698,8 @@ function renderInvoicesView(){
           </tbody>
         </table>
       </div>`}
-      ${Math.abs(diff)>=0.01 && items.length>0 ? `<p style="font-size:11.5px; color:var(--text-dim); margin-top:8px;">A soma dos lançamentos ainda não bate com a fatura atual — isso é normal se nem todos os gastos do período foram lançados manualmente ainda, ou se a fatura foi atualizada direto pelo extrato do banco. Se você já lançou tudo certinho, pode usar o botão acima pra sincronizar.</p>` : ''}
     </div>`;
   }).join('');
-
-  container.querySelectorAll('[data-sync-invoice]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      const cardName = btn.dataset.syncInvoice;
-      const c = DB.cards.find(x=>x.name===cardName);
-      if(!c) return;
-      const items = DB.movements.filter(m=>m.account===c.name && m.paymentMethod==='Crédito');
-      const subtotal = items.reduce((s,m)=>s+Number(m.amount),0);
-      if(!confirm(`Atualizar a fatura atual do ${c.name} para ${fmtBRL(subtotal)} (soma dos lançamentos)?`)) return;
-      c.currentInvoice = Math.round(subtotal*100)/100;
-      saveDB(DB); renderAll();
-      showToast(`Fatura do ${c.name} sincronizada.`);
-    });
-  });
 }
 
 /* ============================================================
@@ -1737,7 +1777,7 @@ function renderChartInvoices(){
   charts.inv = new Chart(ctx, {
     type:'bar',
     data:{labels:DB.cards.map(c=>c.name), datasets:[
-      {label:'Fatura atual', data:DB.cards.map(c=>c.currentInvoice), backgroundColor:'#ff5d7a', borderRadius:6},
+      {label:'Fatura atual', data:DB.cards.map(c=>getComputedInvoice(c)), backgroundColor:'#ff5d7a', borderRadius:6},
       {label:'Próxima fatura', data:DB.cards.map(c=>c.nextInvoice), backgroundColor:'#ffb84d', borderRadius:6},
     ]},
     options:{
@@ -1824,7 +1864,7 @@ function renderAllCharts(){
 function computeAlerts(){
   const alerts = [];
   DB.cards.forEach(c=>{
-    const pct = (Number(c.currentInvoice)/Number(c.limit))*100;
+    const pct = (getComputedInvoice(c)/Number(c.limit))*100;
     if(pct >= 80) alerts.push({level:'crit', title:`${c.name} acima de 80% do limite`, desc:`Uso atual de ${pct.toFixed(0)}% do limite total.`});
     const daysToDue = daysUntilDay(c.dueDay);
     if(daysToDue <= 5 && daysToDue >= 0) alerts.push({level:'warn', title:`Fatura do ${c.name} vence em breve`, desc:`Vencimento em ${daysToDue} dia(s), dia ${c.dueDay}.`});
@@ -2126,18 +2166,22 @@ function openCardModal(name){
   const c = DB.cards.find(x=>x.name===name);
   if(!c) return;
   const saldoConta = getAccountBalance(c.name);
+  const invoiceAtual = getComputedInvoice(c);
   openModal(`
     <div class="modal-head"><h3>Editar ${c.name}</h3><button id="modalClose">&times;</button></div>
     <div class="form-grid">
-      <div class="field"><label>Saldo da conta (R$)</label><input type="number" step="0.01" id="f_saldo" value="${saldoConta}"></div>
+      <div class="field"><label>Saldo da conta agora (R$)</label><input type="number" step="0.01" id="f_saldo" value="${saldoConta}"></div>
       <div class="field"><label>Limite total (R$)</label><input type="number" step="0.01" id="f_limit" value="${c.limit}"></div>
-      <div class="field"><label>Limite disponível (R$)</label><input type="number" step="0.01" id="f_avail" value="${getAvailableLimit(c)}"></div>
       <div class="field"><label>Fechamento (dia)</label><input type="number" min="1" max="31" id="f_closing" value="${c.closingDay}"></div>
       <div class="field"><label>Vencimento (dia)</label><input type="number" min="1" max="31" id="f_due" value="${c.dueDay}"></div>
-      <div class="field"><label>Fatura atual (R$)</label><input type="number" step="0.01" id="f_curr" value="${c.currentInvoice}"></div>
+      <div class="field"><label>Corrigir fatura atual (R$)</label><input type="number" step="0.01" id="f_curr" value="${invoiceAtual}"></div>
       <div class="field"><label>Próxima fatura (R$)</label><input type="number" step="0.01" id="f_next" value="${c.nextInvoice}"></div>
     </div>
-    <p style="font-size:11.5px; color:var(--text-dim); margin-top:4px;">O limite disponível é digitado direto (como aparece no app do banco) e não precisa bater exatamente com limite − fatura, já que bancos costumam reservar parte do limite.</p>
+    <p style="font-size:11.5px; color:var(--text-dim); margin-top:4px;">
+      "Saldo da conta" e "Fatura atual" agora são calculados automaticamente a partir das suas Movimentações.
+      Só mexa nesses dois campos se precisar <b>corrigir</b> algo manualmente (ex: taxa do banco não lançada) —
+      isso reinicia o cálculo a partir de hoje, sem apagar o que já foi lançado antes.
+    </p>
     <div class="modal-actions">
       <button class="btn" id="modalCancel">Cancelar</button>
       <button class="btn btn-primary" id="modalSave">Salvar</button>
@@ -2145,13 +2189,26 @@ function openCardModal(name){
   `);
   document.getElementById('modalSave').addEventListener('click', ()=>{
     c.limit = parseFloat(document.getElementById('f_limit').value)||c.limit;
-    c.availableLimit = parseFloat(document.getElementById('f_avail').value)||0;
     c.closingDay = parseInt(document.getElementById('f_closing').value)||c.closingDay;
     c.dueDay = parseInt(document.getElementById('f_due').value)||c.dueDay;
-    c.currentInvoice = parseFloat(document.getElementById('f_curr').value)||0;
     c.nextInvoice = parseFloat(document.getElementById('f_next').value)||0;
-    DB.accountBalances = DB.accountBalances || {};
-    DB.accountBalances[c.name] = parseFloat(document.getElementById('f_saldo').value)||0;
+
+    const newInvoice = parseFloat(document.getElementById('f_curr').value);
+    const newSaldo = parseFloat(document.getElementById('f_saldo').value);
+    const correctingInvoice = !isNaN(newInvoice) && Math.abs(newInvoice-invoiceAtual)>=0.01;
+    const correctingSaldo = !isNaN(newSaldo) && Math.abs(newSaldo-saldoConta)>=0.01;
+
+    if(correctingInvoice || correctingSaldo){
+      freezeAllBaselines(); // preserva o total calculado de tudo antes de mexer em qualquer coisa
+      if(correctingInvoice){ c.currentInvoice = newInvoice; c.invoiceBaselineDate = todayISO(); }
+      if(correctingSaldo){
+        DB.accountBalancesAsOf = DB.accountBalancesAsOf || {};
+        DB.accountBalances[c.name] = newSaldo;
+        DB.accountBalancesAsOf[c.name] = todayISO();
+      }
+      finalizeBaselineReset();
+    }
+
     saveDB(DB); closeModal(); renderAll(); showToast('Cartão atualizado.');
   });
 }
@@ -2159,13 +2216,14 @@ function openCardModal(name){
 function openPayInvoiceModal(name){
   const c = DB.cards.find(x=>x.name===name);
   if(!c) return;
+  const invoiceAtual = getComputedInvoice(c);
   const defaultAccount = ACCOUNTS.includes(c.name) ? c.name : ACCOUNTS[0];
   openModal(`
     <div class="modal-head"><h3>Pagar fatura — ${c.name}</h3><button id="modalClose">&times;</button></div>
-    <p style="font-size:12.5px; color:var(--text-dim); margin-bottom:14px;">Fatura atual: <b style="color:var(--text)">${fmtBRL(c.currentInvoice)}</b>. Ao confirmar, o valor pago sai do saldo da conta escolhida, a fatura diminui e o limite disponível do cartão volta automaticamente.</p>
+    <p style="font-size:12.5px; color:var(--text-dim); margin-bottom:14px;">Fatura atual: <b style="color:var(--text)">${fmtBRL(invoiceAtual)}</b>. Ao confirmar, lançamos a saída na conta escolhida (o saldo dela já desconta sozinho) e a fatura deste cartão volta a contar do zero a partir de hoje.</p>
     <div class="form-grid">
       <div class="field"><label>Data do pagamento</label><input type="date" id="f_paydate" value="${todayISO()}"></div>
-      <div class="field"><label>Valor pago (R$)</label><input type="number" step="0.01" id="f_payamount" value="${c.currentInvoice}"></div>
+      <div class="field"><label>Valor pago (R$)</label><input type="number" step="0.01" id="f_payamount" value="${invoiceAtual}"></div>
       <div class="field full"><label>Pagar com qual conta?</label>
         <select id="f_payaccount">${ACCOUNTS.map(a=>`<option ${a===defaultAccount?'selected':''}>${a}</option>`).join('')}</select>
       </div>
@@ -2181,17 +2239,16 @@ function openPayInvoiceModal(name){
     const contaOrigem = document.getElementById('f_payaccount').value;
     if(!data || isNaN(valor) || valor<=0){ showToast('Preencha data e um valor válido.'); return; }
 
-    // 1) reduz a fatura atual (sem ficar negativa)
-    c.currentInvoice = Math.max(0, Math.round((Number(c.currentInvoice)-valor)*100)/100);
-    // 2) devolve o limite disponível (sem passar do limite total)
-    const availAtual = getAvailableLimit(c);
-    c.availableLimit = Math.min(Number(c.limit), Math.round((availAtual+valor)*100)/100);
+    // 1) congela o total calculado de cada cartão/conta (preserva tudo), aplica o
+    //    novo ponto de partida da fatura já com o pagamento descontado, e "esquece"
+    //    as movimentações já existentes — tudo ANTES de lançar o pagamento em si.
+    freezeAllBaselines();
+    c.currentInvoice = Math.max(0, Math.round((invoiceAtual-valor)*100)/100);
+    c.invoiceBaselineDate = data;
+    finalizeBaselineReset();
 
-    // 3) registra a saída de dinheiro da conta usada para pagar
-    DB.accountBalances = DB.accountBalances || {};
-    DB.accountBalances[contaOrigem] = Math.round(((DB.accountBalances[contaOrigem]||0) - valor)*100)/100;
-
-    // 4) lança a movimentação para manter o histórico
+    // 2) lança a saída na conta escolhida — o saldo dela é calculado a partir das
+    //    Movimentações, então essa mesma linha já desconta sozinha, sem precisar mexer em mais nada.
     DB.movements.push({
       id:uid(), date:data, type:'despesa', category:'Financeiro', account:contaOrigem, paymentMethod:'Transferência',
       description:`Pagamento fatura ${c.name}`, amount:valor, competencia:competenciaOf(data)
@@ -2800,8 +2857,11 @@ document.getElementById('btnRefresh').addEventListener('click', async ()=>{
 });
 document.getElementById('btnSaveCaixa').addEventListener('click', ()=>{
   const val = parseFloat(document.getElementById('f_saldo_caixa').value)||0;
-  DB.accountBalances = DB.accountBalances || {};
+  freezeAllBaselines();
+  DB.accountBalancesAsOf = DB.accountBalancesAsOf || {};
   DB.accountBalances['Caixa'] = val;
+  DB.accountBalancesAsOf['Caixa'] = todayISO();
+  finalizeBaselineReset();
   saveDB(DB); renderAll(); showToast('Saldo da Caixa atualizado.');
 });
 document.getElementById('btnAddEvent').addEventListener('click', ()=>openEventModal(null));
@@ -2856,6 +2916,7 @@ async function init(){
   setupStickyBarScroll();
   try{
     DB = await loadDB();
+    if(migrateBaselines()){ await saveDB(DB); }
   }catch(e){
     console.error('Erro crítico ao carregar dados:', e);
     document.getElementById('loadingOverlay').style.display = 'flex';
