@@ -132,9 +132,9 @@ button{cursor:pointer; border:none; background:none; color:inherit;}
 .gauge-wrap{display:flex; align-items:center; gap:14px;}
 .gauge-wrap svg{flex-shrink:0;}
 
-.dashboard-grid{display:grid; grid-template-columns:1fr 300px; gap:22px; align-items:start;}
-.dash-main{min-width:0;}
-.dash-side{position:sticky; top:76px; display:flex; flex-direction:column; gap:12px;}
+.dashboard-grid{display:grid; grid-template-columns:1fr 300px; gap:22px; align-items:start; position:relative;}
+.dash-main{min-width:0; position:relative; z-index:1;}
+.dash-side{position:sticky; top:90px; display:flex; flex-direction:column; gap:12px; z-index:0; align-self:start;}
 .dash-side .side-panel-card{
   background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:16px;
   overflow-wrap:break-word; word-break:break-word; min-width:0;
@@ -201,7 +201,7 @@ button{cursor:pointer; border:none; background:none; color:inherit;}
 .btn-sm{padding:6px 10px; font-size:12px;}
 
 /* GRID / CARDS */
-.kpi-grid{display:grid; grid-template-columns:repeat(6, 1fr); gap:14px;}
+.kpi-grid{display:grid; grid-template-columns:repeat(6, 1fr); gap:14px; position:relative; z-index:2;}
 .kpi-grid.secondary{margin-top:14px;}
 @media(max-width:1400px){.kpi-grid{grid-template-columns:repeat(3,1fr);}}
 @media(max-width:760px){.kpi-grid{grid-template-columns:repeat(2,1fr);}}
@@ -836,11 +836,10 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
     <!-- ================= PARCELAMENTOS ================= -->
     <section class="view" id="view-installments">
       <div class="section-title">
-        <div><h2>Parcelamentos</h2><div class="sub">Compras parceladas ativas</div></div>
-        <button class="btn btn-primary" id="btnAddInstallment">+ Novo parcelamento</button>
+        <div><h2>Parcelamentos</h2><div class="sub">Compras parceladas ativas — cadastradas direto em Movimentações, marcando "Parcelado"</div></div>
       </div>
       <div class="kpi-grid" id="instKpi" style="grid-template-columns:repeat(4,1fr); margin-bottom:20px;"></div>
-      <div class="mini-cards" id="instCards"></div>
+      <div id="instCards"></div>
     </section>
 
     <!-- ================= RESERVAS ================= -->
@@ -2306,9 +2305,20 @@ function openMovModal(id){
           <option value="parcelado">Parcelado</option>
         </select>
       </div>
+      <div class="field" id="wrap_installment_kind" style="display:none;">
+        <label>É uma compra nova ou já vem pagando?</label>
+        <select id="f_installment_kind">
+          <option value="nova">Compra nova (parcela 1 é agora)</option>
+          <option value="existente">Já vem pagando (parcelamento existente)</option>
+        </select>
+      </div>
       <div class="field" id="wrap_installment_count" style="display:none;">
         <label>Em quantas vezes?</label>
         <input type="number" id="f_installment_count" min="2" max="24" value="2">
+      </div>
+      <div class="field" id="wrap_installment_current" style="display:none;">
+        <label>Em qual parcela você está?</label>
+        <input type="number" id="f_installment_current" min="1" max="24" value="1">
       </div>
       <div class="field" id="wrap_recurring" style="display:none;">
         <label>Isso se repete todo mês?</label>
@@ -2338,6 +2348,9 @@ function openMovModal(id){
     const recurringModeEl = document.getElementById('f_recurring_mode');
     const recurringNote = document.getElementById('recurring_note');
     const dateEl = document.getElementById('f_date');
+    const wrapKind = document.getElementById('wrap_installment_kind');
+    const kindEl = document.getElementById('f_installment_kind');
+    const wrapCurrent = document.getElementById('wrap_installment_current');
 
     function syncInstallmentUI(){
       const isCreditExpense = payEl.value === 'Crédito' && typeEl.value === 'despesa';
@@ -2345,7 +2358,10 @@ function openMovModal(id){
       if(!isCreditExpense){ modeEl.value = '1'; }
       const parcelado = isCreditExpense && modeEl.value === 'parcelado';
       wrapCount.style.display = parcelado ? '' : 'none';
-      amountLabel.textContent = parcelado ? 'Valor total da compra (R$)' : 'Valor (R$)';
+      wrapKind.style.display = parcelado ? '' : 'none';
+      const isExisting = parcelado && kindEl.value === 'existente';
+      wrapCurrent.style.display = isExisting ? '' : 'none';
+      amountLabel.textContent = parcelado ? (isExisting ? 'Valor de cada parcela (R$)' : 'Valor total da compra (R$)') : 'Valor (R$)';
 
       const isDespesa = typeEl.value === 'despesa';
       wrapRecurring.style.display = (isDespesa && !parcelado) ? '' : 'none';
@@ -2355,6 +2371,7 @@ function openMovModal(id){
     payEl.addEventListener('change', syncInstallmentUI);
     typeEl.addEventListener('change', syncInstallmentUI);
     modeEl.addEventListener('change', syncInstallmentUI);
+    kindEl.addEventListener('change', syncInstallmentUI);
     recurringModeEl.addEventListener('change', syncInstallmentUI);
     dateEl.addEventListener('change', ()=>{
       recurringNote.textContent = `Isso vai criar um "gasto fixo" com cobrança sempre no dia ${new Date(dateEl.value+'T00:00:00').getDate()} — o app lança sozinho todo mês a partir do mês que vem (acompanhe na aba Gastos Fixos).`;
@@ -2377,6 +2394,23 @@ function openMovModal(id){
 
     if(isParcelado){
       const parcelas = clamp(parseInt(document.getElementById('f_installment_count').value)||2, 2, 24);
+      const kindVal = document.getElementById('f_installment_kind').value;
+
+      if(kindVal === 'existente'){
+        // parcelamento que já vem sendo pago — não lança nada agora (você já deve ter
+        // ajustado a fatura manualmente); a partir do mês que vem, lança sozinho.
+        const parcelaAtual = clamp(parseInt(document.getElementById('f_installment_current').value)||1, 1, parcelas);
+        const remaining = Math.max(0, parcelas - parcelaAtual);
+        DB.installments.push({
+          id:uid(), purchase:description, category, card:account, totalValue: amount*parcelas,
+          installmentsCount:parcelas, installmentValue:amount, purchaseDate:date, remainingInstallments:remaining,
+          autoLaunchFrom: nextCompetencia(currentCompetencia())
+        });
+        saveDB(DB); closeModal(); renderAll();
+        showToast(`Parcelamento cadastrado (parcela ${parcelaAtual}/${parcelas}). Restam ${remaining} parcela(s), que entram sozinhas a partir do mês que vem.`);
+        return;
+      }
+
       const installmentValue = Math.round((amount/parcelas)*100)/100;
       const installmentId = uid();
       // lança só a parcela de agora — as próximas são cuidadas sozinhas pelo motor
@@ -2635,30 +2669,32 @@ function renderInstallmentsView(){
   ].join('');
 
   const box = document.getElementById('instCards');
-  if(DB.installments.length===0){ box.innerHTML = `<div class="empty-state">Nenhum parcelamento cadastrado.</div>`; return; }
-  box.innerHTML = DB.installments.map(i=>{
+  if(DB.installments.length===0){ box.innerHTML = emptyStateHTML('Nenhum parcelamento cadastrado ainda. Marque "Parcelado" ao criar uma movimentação em crédito.'); return; }
+  box.innerHTML = `<div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:14px;">${DB.installments.map(i=>{
     const done = i.installmentsCount - i.remainingInstallments;
     const pct = clamp((done/i.installmentsCount)*100,0,100);
     const remaining = i.installmentValue*i.remainingInstallments;
+    const color = pct>=80 ? 'var(--green)' : (pct>=40 ? 'var(--purple)' : 'var(--amber)');
     return `
-    <div class="mini-card">
-      <div class="mc-top">
-        <div><b>${i.purchase}</b><div style="font-size:11px; color:var(--text-dim); margin-top:2px;">${i.category} · ${i.card}</div></div>
-        <div class="row-actions">
-          <button class="icon-btn" data-edit-inst="${i.id}">${ICONS.edit}</button>
-          <button class="icon-btn" data-del-inst="${i.id}">${ICONS.trash}</button>
-        </div>
+    <div class="budget-item" style="margin-bottom:0;">
+      <div class="bi-top">
+        <span style="display:flex; align-items:center; gap:10px;">${categoryIconBadge(i.category,30)}
+          <span>
+            <b style="display:block;">${i.purchase}</b>
+            <span style="font-size:11px; color:var(--text-dim); display:flex; align-items:center; gap:5px; margin-top:2px;">${cardBadge(i.card,16)}${i.card}</span>
+          </span>
+        </span>
+        <button class="icon-btn" data-del-inst="${i.id}">${ICONS.trash}</button>
       </div>
-      <div class="progress-bar"><span style="width:${pct}%"></span></div>
-      <div class="mc-foot">
-        <span>${done}/${i.installmentsCount} parcelas</span>
-        <span>${fmtBRL(i.installmentValue)}/mês</span>
+      <div style="font-size:19px; font-weight:800; margin:10px 0 6px;">${fmtBRL(i.installmentValue)}<span style="font-size:12px; color:var(--text-dim); font-weight:400;">/mês</span></div>
+      <div class="budget-bar" style="height:10px;"><span style="width:${pct}%; background:${color};"></span></div>
+      <div style="display:flex; justify-content:space-between; margin-top:8px; font-size:11.5px; color:var(--text-dim);">
+        <span>${done}/${i.installmentsCount} parcelas pagas</span>
+        <span>Restam <b style="color:var(--text);">${fmtBRL(remaining)}</b></span>
       </div>
-      <div class="mc-foot"><span>Restante</span><b style="color:var(--text)">${fmtBRL(remaining)}</b></div>
     </div>`;
-  }).join('');
+  }).join('')}</div>`;
 
-  box.querySelectorAll('[data-edit-inst]').forEach(b=>b.addEventListener('click', ()=>openInstallmentModal(b.dataset.editInst)));
   box.querySelectorAll('[data-del-inst]').forEach(b=>b.addEventListener('click', ()=>{
     const instId = b.dataset.delInst;
     const linkedCount = DB.movements.filter(m=>m.installmentId===instId).length;
@@ -3403,7 +3439,6 @@ document.getElementById('btnRefresh').addEventListener('click', async ()=>{
   btn.disabled = false; btn.style.opacity = '1';
 });
 document.getElementById('btnAddEvent').addEventListener('click', ()=>openEventModal(null));
-document.getElementById('btnAddInstallment').addEventListener('click', ()=>openInstallmentModal(null));
 document.getElementById('btnAddBudget').addEventListener('click', ()=>openBudgetModal(null));
 document.getElementById('btnEditGoal').addEventListener('click', ()=>openSavingsGoalModal());
 document.getElementById('calPrevMonth').addEventListener('click', ()=>{ CALENDAR_OFFSET--; CALENDAR_SELECTED_DAY=null; renderCalendarView(); });
