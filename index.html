@@ -334,10 +334,62 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
 
 .empty-state{padding:40px 20px; text-align:center; color:var(--text-dim); font-size:13px;}
 
+/* ===== FAB (botão flutuante de lançamento rápido) ===== */
+.fab{
+  position:fixed; bottom:24px; right:24px; z-index:80;
+  width:58px; height:58px; border-radius:50%;
+  background:linear-gradient(135deg, var(--purple), #7c4dff);
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:0 10px 30px rgba(155,107,255,0.5);
+  color:#fff; border:none; cursor:pointer; transition:transform .15s;
+}
+.fab:hover{transform:scale(1.06);}
+.fab svg{width:26px; height:26px;}
+
+/* ===== Mobile: menu vira gaveta deslizante ===== */
+.mobile-topbar{display:none;}
+.sidebar-backdrop{display:none;}
+
 @media(max-width:900px){
   .app{grid-template-columns:1fr;}
-  .sidebar{position:relative; height:auto;}
+
+  .mobile-topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:12px 16px; background:var(--sidebar); border-bottom:1px solid var(--border);
+    position:sticky; top:0; z-index:60;
+  }
+  .mobile-topbar .mt-brand{display:flex; align-items:center; gap:10px;}
+  .mobile-topbar .mt-brand b{color:var(--text); font-size:14px; font-weight:700;}
+  .hamburger-btn{
+    width:38px; height:38px; border-radius:10px; background:rgba(255,255,255,0.06);
+    display:flex; align-items:center; justify-content:center; color:var(--text); border:none; flex-shrink:0;
+  }
+  .hamburger-btn svg{width:20px; height:20px;}
+
+  .sidebar{
+    position:fixed; top:0; left:0; height:100vh; width:82vw; max-width:300px; z-index:200;
+    transform:translateX(-105%); transition:transform .25s ease; box-shadow:20px 0 60px rgba(0,0,0,0.55);
+  }
+  .sidebar.open{transform:translateX(0);}
+  .sidebar-backdrop.open{
+    display:block; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:150;
+  }
+
+  .main{padding:16px 14px 100px;}
   .cc-grid{grid-template-columns:1fr;}
+  .kpi-grid{grid-template-columns:repeat(2,1fr) !important;}
+  .hero-stats{grid-template-columns:1fr;}
+  .hero-card{padding:20px;}
+  .hero-value{font-size:26px;}
+  .topbar{display:none;} /* usa a mobile-topbar no lugar */
+  .filters-bar{gap:8px;}
+  .filters-bar .field{flex:1 1 45%; min-width:0;}
+  .filters-bar select, .filters-bar input{width:100%;}
+  table{min-width:600px;} /* mantém rolagem horizontal legível */
+}
+@media(max-width:480px){
+  .kpi-grid{grid-template-columns:1fr !important;}
+  .fab{width:52px; height:52px; bottom:18px; right:18px;}
 }
 </style>
 </head>
@@ -457,8 +509,21 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
 </script>
 
 <div class="app">
+  <!-- TOPO MOBILE (só aparece em telas pequenas) -->
+  <div class="mobile-topbar">
+    <button class="hamburger-btn" id="hamburgerBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
+    <div class="mt-brand">
+      <div class="brand-mark" style="width:30px; height:30px; font-size:13px;">₿</div>
+      <b>Meu Financeiro</b>
+    </div>
+    <div style="width:38px;"></div>
+  </div>
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
   <!-- SIDEBAR -->
-  <aside class="sidebar">
+  <aside class="sidebar" id="sidebarEl">
     <div class="brand">
       <div class="brand-mark">₿</div>
       <div class="brand-text"><b>Meu Financeiro</b><span>controle pessoal</span></div>
@@ -478,7 +543,7 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
       <h4>Alertas</h4>
     </div>
 
-    <div class="sidebar-footer">Dados salvos localmente no seu navegador.</div>
+    <div class="sidebar-footer">Dados sincronizados na nuvem — acesse de qualquer aparelho.</div>
   </aside>
 
   <!-- MAIN -->
@@ -671,6 +736,10 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
 
   </main>
 </div>
+
+<button class="fab" id="fabAddMov" title="Lançar movimentação">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+</button>
 
 <div class="overlay" id="modalOverlay">
   <div class="modal" id="modalBox"></div>
@@ -905,11 +974,23 @@ function renderNav(){
       btn.classList.add('active');
       document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
       document.getElementById('view-'+btn.dataset.view).classList.add('active');
+      closeMobileDrawer();
+      const mainEl = document.querySelector('.main');
+      if(mainEl) mainEl.scrollTop = 0;
       // Gráficos criados enquanto a aba estava escondida ficam com tamanho 0;
       // forçamos um recálculo assim que a aba se torna visível.
       setTimeout(()=>{ window.dispatchEvent(new Event('resize')); }, 50);
     });
   });
+}
+
+function openMobileDrawer(){
+  document.getElementById('sidebarEl').classList.add('open');
+  document.getElementById('sidebarBackdrop').classList.add('open');
+}
+function closeMobileDrawer(){
+  document.getElementById('sidebarEl').classList.remove('open');
+  document.getElementById('sidebarBackdrop').classList.remove('open');
 }
 
 /* ============================================================
@@ -1419,6 +1500,15 @@ function computeAlerts(){
 
   if(reserves.total < 200) alerts.push({level:'warn', title:'Reservas abaixo da meta', desc:`Total acumulado de ${fmtBRL(reserves.total)}. Considere reforçar suas caixinhas.`});
 
+  const comp = currentCompetencia();
+  const todayDay = new Date().getDate();
+  fixedT.active.forEach(f=>{
+    const jaLancado = DB.movements.some(m=>m.fixedExpenseId===f.id && m.competencia===comp);
+    if(!jaLancado && f.billingDay <= todayDay){
+      alerts.push({level:'warn', title:`${f.name} ainda não foi lançado esse mês`, desc:`Cobrança do dia ${f.billingDay} — ${fmtBRL(f.amount)}. Lance na aba Gastos Fixos.`});
+    }
+  });
+
   if(alerts.length===0) alerts.push({level:'ok', title:'Tudo em ordem', desc:'Nenhum alerta no momento.'});
   return alerts;
 }
@@ -1556,16 +1646,18 @@ function openMovModal(id){
     if(isParcelado){
       const parcelas = clamp(parseInt(document.getElementById('f_installment_count').value)||2, 2, 24);
       const installmentValue = Math.round((amount/parcelas)*100)/100;
+      const installmentId = uid();
       for(let k=0; k<parcelas; k++){
         const parcelaDate = addMonthsToDate(date, k);
         DB.movements.push({
           id:uid(), date:parcelaDate, type:'despesa', category, account, paymentMethod,
           description: `${description} (Parcela ${k+1}/${parcelas})`,
-          amount: installmentValue, competencia: competenciaOf(parcelaDate)
+          amount: installmentValue, competencia: competenciaOf(parcelaDate),
+          installmentId
         });
       }
       DB.installments.push({
-        id:uid(), purchase:description, category, card:account, totalValue:amount,
+        id:installmentId, purchase:description, category, card:account, totalValue:amount,
         installmentsCount:parcelas, installmentValue, purchaseDate:date, remainingInstallments:parcelas-1
       });
       saveDB(DB); closeModal(); renderAll();
@@ -1790,9 +1882,15 @@ function renderInstallmentsView(){
 
   box.querySelectorAll('[data-edit-inst]').forEach(b=>b.addEventListener('click', ()=>openInstallmentModal(b.dataset.editInst)));
   box.querySelectorAll('[data-del-inst]').forEach(b=>b.addEventListener('click', ()=>{
-    if(confirm('Excluir este parcelamento?')){
-      DB.installments = DB.installments.filter(i=>i.id!==b.dataset.delInst);
-      saveDB(DB); renderAll(); showToast('Parcelamento excluído.');
+    const instId = b.dataset.delInst;
+    const linkedCount = DB.movements.filter(m=>m.installmentId===instId).length;
+    const msg = linkedCount>0
+      ? `Excluir este parcelamento? Isso também vai apagar ${linkedCount} parcela(s) já lançada(s) nas Movimentações.`
+      : 'Excluir este parcelamento?';
+    if(confirm(msg)){
+      DB.installments = DB.installments.filter(i=>i.id!==instId);
+      DB.movements = DB.movements.filter(m=>m.installmentId!==instId);
+      saveDB(DB); renderAll(); showToast('Parcelamento e parcelas relacionadas excluídos.');
     }
   }));
 }
@@ -1814,21 +1912,25 @@ function renderFixedExpensesView(){
 
   const tbody = document.getElementById('fixedTableBody');
   const list = t.list;
+  const comp = currentCompetencia();
   if(list.length===0){ tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">Nenhum gasto fixo cadastrado ainda.</div></td></tr>`; return; }
-  tbody.innerHTML = list.map(f=>`
+  tbody.innerHTML = list.map(f=>{
+    const jaLancado = DB.movements.some(m=>m.fixedExpenseId===f.id && m.competencia===comp);
+    return `
     <tr>
-      <td style="font-weight:700;">${f.name}</td>
+      <td style="font-weight:700;">${f.name} ${jaLancado ? `<span class="pill green" style="margin-left:6px;">Lançado esse mês</span>` : ''}</td>
       <td>${f.category}</td>
       <td style="color:var(--red); font-weight:700;">${fmtBRL(f.amount)}</td>
       <td>dia ${f.billingDay}</td>
       <td>${f.account} · ${f.paymentMethod}</td>
       <td><span class="pill ${f.active?'green':'gray'}">${f.active?'Ativo':'Pausado'}</span></td>
       <td><div class="row-actions">
-        <button class="btn btn-sm" data-launch-fixed="${f.id}">Lançar esse mês</button>
+        <button class="btn btn-sm" data-launch-fixed="${f.id}" ${jaLancado?'disabled style="opacity:.4; cursor:not-allowed;"':''}>${jaLancado?'Já lançado':'Lançar esse mês'}</button>
         <button class="icon-btn" data-edit-fixed="${f.id}">${ICONS.edit}</button>
         <button class="icon-btn" data-del-fixed="${f.id}">${ICONS.trash}</button>
       </div></td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 
   tbody.querySelectorAll('[data-edit-fixed]').forEach(b=>b.addEventListener('click', ()=>openFixedExpenseModal(b.dataset.editFixed)));
   tbody.querySelectorAll('[data-del-fixed]').forEach(b=>b.addEventListener('click', ()=>{
@@ -1845,7 +1947,8 @@ function renderFixedExpensesView(){
     const date = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
     DB.movements.push({
       id:uid(), date, type:'despesa', category:f.category, account:f.account, paymentMethod:f.paymentMethod,
-      description:f.name, amount:Number(f.amount), competencia:competenciaOf(date)
+      description:f.name, amount:Number(f.amount), competencia:competenciaOf(date),
+      fixedExpenseId:f.id
     });
     saveDB(DB); renderAll();
     showToast(`${f.name} lançado em ${fmtDate(date)}.`);
@@ -2072,6 +2175,9 @@ document.getElementById('btnReset').addEventListener('click', ()=>{
    BOTÕES "NOVO"
    ============================================================ */
 document.getElementById('btnAddMov').addEventListener('click', ()=>openMovModal(null));
+document.getElementById('hamburgerBtn').addEventListener('click', openMobileDrawer);
+document.getElementById('sidebarBackdrop').addEventListener('click', closeMobileDrawer);
+document.getElementById('fabAddMov').addEventListener('click', ()=>openMovModal(null));
 document.getElementById('btnSaveCaixa').addEventListener('click', ()=>{
   const val = parseFloat(document.getElementById('f_saldo_caixa').value)||0;
   DB.accountBalances = DB.accountBalances || {};
