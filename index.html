@@ -114,8 +114,10 @@ button{cursor:pointer; border:none; background:none; color:inherit;}
 .top-right{text-align:right; font-size:12px; color:var(--text-dim); display:flex; flex-direction:column; gap:4px;}
 .top-right b{color:var(--text); font-size:13px;}
 
-.hero-stats{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:24px;}
+.hero-stats{display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; margin-bottom:24px;}
 @media(max-width:700px){.hero-stats{grid-template-columns:1fr;}}
+.gauge-wrap{display:flex; align-items:center; gap:14px;}
+.gauge-wrap svg{flex-shrink:0;}
 .hero-card{
   border-radius:22px; padding:26px 28px; position:relative; overflow:hidden;
   display:flex; flex-direction:column; gap:6px; min-height:118px; justify-content:center;
@@ -622,8 +624,11 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
       <div class="kpi-grid" id="kpiMain"></div>
       <div class="kpi-grid secondary" id="kpiSecondary"></div>
 
+      <div class="section-title"><div><h2>Alertas automáticos</h2><div class="sub">Fique de olho nesses pontos</div></div></div>
+      <div class="alerts-panel" id="alertsPanel"></div>
+
       <div class="section-title">
-        <div><h2>Central dos Cartões</h2><div class="sub">Visão consolidada dos seus cartões de crédito</div></div>
+        <div><h2>Central dos Cartões</h2><div class="sub">Resumo rápido — veja os detalhes completos na aba Cartões</div></div>
       </div>
       <div class="cards-central">
         <div class="cc-header">
@@ -642,9 +647,6 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
         <div class="chart-card"><h4>Evolução das faturas por cartão</h4><div class="chart-holder small"><canvas id="chartInvoices"></canvas></div></div>
         <div class="chart-card"><h4>Evolução das reservas</h4><div class="chart-holder small"><canvas id="chartReserves"></canvas></div></div>
       </div>
-
-      <div class="section-title"><div><h2>Alertas automáticos</h2><div class="sub">Fique de olho nesses pontos</div></div></div>
-      <div class="alerts-panel" id="alertsPanel"></div>
     </section>
 
     <!-- ================= MOVIMENTAÇÕES ================= -->
@@ -708,7 +710,11 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
         <div><h2>Orçamento por categoria</h2><div class="sub">Defina um teto mensal e acompanhe quanto já gastou</div></div>
         <button class="btn btn-primary" id="btnAddBudget">+ Definir orçamento</button>
       </div>
-      <div id="budgetContainer" style="margin-bottom:32px;"></div>
+      <div id="budgetContainer" style="margin-bottom:20px;"></div>
+      <div class="chart-card" id="budgetChartCard" style="margin-bottom:32px; display:none;">
+        <h4>Orçamento x Realizado</h4>
+        <div class="chart-holder" style="height:220px;"><canvas id="chartBudget"></canvas></div>
+      </div>
 
       <div class="section-title">
         <div><h2>Meta de economia</h2><div class="sub">Baseada no total das suas reservas/caixinhas</div></div>
@@ -1252,10 +1258,36 @@ function pctDelta(curr, prev){
   return {txt:`${p>=0?'+':''}${p.toFixed(0)}% vs mês ant.`, up:p>=0};
 }
 
+function gaugeSVG(pct, color){
+  // meio-círculo (180°), pct de 0 a 100
+  const r = 46, cx = 60, cy = 58;
+  const c = Math.PI * r; // metade da circunferência
+  const offset = c - (clamp(pct,0,100)/100)*c;
+  return `
+  <svg width="120" height="68" viewBox="0 0 120 68">
+    <path d="M ${cx-r} ${cy} A ${r} ${r} 0 0 1 ${cx+r} ${cy}" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="10" stroke-linecap="round"/>
+    <path d="M ${cx-r} ${cy} A ${r} ${r} 0 0 1 ${cx+r} ${cy}" fill="none" stroke="${color}" stroke-width="10" stroke-linecap="round"
+      stroke-dasharray="${c}" stroke-dashoffset="${offset}" style="filter:drop-shadow(0 0 6px ${color}90); transition:stroke-dashoffset .4s;"/>
+  </svg>`;
+}
+
 function renderHeroStats(){
   const comp = currentCompetencia();
   const despesaMes = sumByTypeComp(comp,'despesa');
   const saldoTotal = totalAccountBalances();
+
+  // Disponível real (mesma conta usada nos KPIs secundários)
+  const reserves = reservesTotals();
+  const t = cardTotals();
+  const instT = installmentsTotals();
+  const fixedT = fixedExpensesTotals();
+  const disponivelReal = saldoTotal + reserves.total - t.totalCurrent - t.totalNext - instT.monthlyCommitted - fixedT.monthlyTotal;
+
+  // escala adaptativa do velocímetro: de -metade do saldo até o saldo total (ou um mínimo razoável)
+  const scaleMax = Math.max(saldoTotal, 1000);
+  const scaleMin = -scaleMax*0.4;
+  const pct = clamp(((disponivelReal - scaleMin) / (scaleMax - scaleMin)) * 100, 0, 100);
+  const gaugeColor = disponivelReal < 0 ? '#ff5d7a' : (pct < 45 ? '#ffb84d' : '#2be08a');
 
   document.getElementById('heroStats').innerHTML = `
     <div class="hero-card balance">
@@ -1267,6 +1299,16 @@ function renderHeroStats(){
       <div class="hero-label"><span class="hero-icon">${ICONS.down}</span>Gasto no mês</div>
       <div class="hero-value">${fmtBRL(despesaMes)}</div>
       <div class="hero-sub">Total de despesas lançadas em ${MONTH_NAMES_FULL[new Date().getMonth()]}</div>
+    </div>
+    <div class="hero-card" style="background:radial-gradient(circle at 85% 0%, ${gaugeColor}22, transparent 60%), linear-gradient(160deg, var(--card2), var(--card));">
+      <div class="hero-label"><span class="hero-icon">${ICONS.dashboard}</span>Disponível real</div>
+      <div class="gauge-wrap">
+        ${gaugeSVG(pct, gaugeColor)}
+        <div>
+          <div class="hero-value" style="font-size:24px; color:${gaugeColor};">${fmtBRL(disponivelReal)}</div>
+          <div class="hero-sub">Após faturas, parcelas e gastos fixos</div>
+        </div>
+      </div>
     </div>
   `;
 }
@@ -1373,8 +1415,27 @@ function creditCardHTML(c, withActions){
   </div>`;
 }
 
+function creditCardCompactHTML(c){
+  const avail = getAvailableLimit(c);
+  const pct = clamp(((Number(c.limit)-avail)/Number(c.limit))*100,0,100);
+  const color = CARD_COLORS[c.name] || '#9b6bff';
+  return `
+  <div class="credit-card" data-card="${c.name}" style="padding:12px;">
+    <div class="cc-body" style="gap:10px;">
+      <div class="ring-wrap" style="width:52px; height:52px;">
+        ${ringSVG(pct,color).replace('width="78" height="78" viewBox="0 0 78 78"','width="52" height="52" viewBox="0 0 78 78"')}
+        <div class="ring-label" style="font-size:11px;">${pct.toFixed(0)}%</div>
+      </div>
+      <div>
+        <div style="font-weight:700; font-size:13px;">${c.name}</div>
+        <div style="font-size:11px; color:var(--text-dim);">Fatura: <b style="color:var(--text);">${fmtBRL(c.currentInvoice)}</b></div>
+      </div>
+    </div>
+  </div>`;
+}
+
 function renderCardsCentral(){
-  document.getElementById('ccGrid').innerHTML = DB.cards.map(c=>creditCardHTML(c,false)).join('');
+  document.getElementById('ccGrid').innerHTML = DB.cards.map(c=>creditCardCompactHTML(c)).join('');
   document.getElementById('ccGridFull').innerHTML = DB.cards.map(c=>creditCardHTML(c,true)).join('');
   document.querySelectorAll('[data-edit-card]').forEach(btn=>{
     btn.addEventListener('click', ()=> openCardModal(btn.dataset.editCard));
@@ -1485,18 +1546,23 @@ function renderChartCat(){
   const despesas = movs.filter(m=>m.type==='despesa');
   const byCat = {};
   despesas.forEach(m=> byCat[m.category] = (byCat[m.category]||0) + Number(m.amount));
-  const entries = Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
+  const entries = Object.entries(byCat).sort((a,b)=>a[1]-b[1]); // crescente, pra maior barra ficar no topo (Chart.js horizontal)
   const total = entries.reduce((s,[,v])=>s+v,0) || 1;
   const palette = ['#9b6bff','#2be08a','#ff5d7a','#ffb84d','#5ac8fa','#f472b6','#facc15','#34d399','#818cf8','#fb923c','#94a3b8'];
   const ctx = document.getElementById('chartCat');
   charts.cat = new Chart(ctx, {
-    type:'doughnut',
-    data:{labels:entries.map(e=>e[0]), datasets:[{data:entries.map(e=>e[1]), backgroundColor:palette, borderColor:'#171820', borderWidth:3}]},
+    type:'bar',
+    data:{labels:entries.map(e=>e[0]), datasets:[{data:entries.map(e=>e[1]), backgroundColor:entries.map((_,i)=>palette[i%palette.length]), borderRadius:6, barThickness:16}]},
     options:{
-      responsive:true, maintainAspectRatio:false, cutout:'68%',
+      indexAxis:'y',
+      responsive:true, maintainAspectRatio:false,
       plugins:{
-        legend:{position:'right', labels:{boxWidth:9, boxHeight:9, usePointStyle:true, font:{size:10.5}}},
-        tooltip:{callbacks:{label:(c)=>{ const v=c.raw; const pct=((v/total)*100).toFixed(1); return `${c.label}: ${fmtBRL(v)} (${pct}%)`; }}}
+        legend:{display:false},
+        tooltip:{callbacks:{label:(c)=>{ const v=c.raw; const pct=((v/total)*100).toFixed(1); return `${fmtBRL(v)} (${pct}%)`; }}}
+      },
+      scales:{
+        x:{grid:{color:'rgba(255,255,255,0.05)'}, ticks:{callback:(v)=>'R$ '+v}},
+        y:{grid:{display:false}, ticks:{font:{size:11}}}
       }
     }
   });
@@ -2161,10 +2227,13 @@ function renderCalendarView(){
 
 function renderBudgetView(){
   const container = document.getElementById('budgetContainer');
+  const chartCard = document.getElementById('budgetChartCard');
   const budgets = DB.budgets || {};
   const cats = Object.keys(budgets);
   if(cats.length===0){
     container.innerHTML = `<div class="empty-state">Nenhum orçamento definido ainda. Clique em "+ Definir orçamento" pra criar um teto mensal por categoria.</div>`;
+    chartCard.style.display = 'none';
+    destroyChart('budget');
     return;
   }
   const comp = currentCompetencia();
@@ -2197,6 +2266,24 @@ function renderBudgetView(){
       saveDB(DB); renderAll(); showToast('Orçamento removido.');
     }
   }));
+
+  if(typeof Chart !== 'undefined'){
+    chartCard.style.display = '';
+    destroyChart('budget');
+    const spentByCat = cats.map(cat=>DB.movements.filter(m=>m.category===cat && m.type==='despesa' && m.competencia===comp).reduce((s,m)=>s+Number(m.amount),0));
+    charts.budget = new Chart(document.getElementById('chartBudget'), {
+      type:'bar',
+      data:{labels:cats, datasets:[
+        {label:'Orçamento', data:cats.map(c=>Number(budgets[c])), backgroundColor:'rgba(155,107,255,0.35)', borderRadius:6},
+        {label:'Realizado', data:spentByCat, backgroundColor:cats.map((c,i)=> spentByCat[i]>Number(budgets[c]) ? '#ff5d7a' : '#2be08a'), borderRadius:6},
+      ]},
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{legend:{position:'top', align:'end', labels:{boxWidth:10, boxHeight:10, usePointStyle:true}}},
+        scales:{x:{grid:{display:false}}, y:{grid:{color:'rgba(255,255,255,0.05)'}, ticks:{callback:(v)=>'R$ '+v}}}
+      }
+    });
+  }
 }
 
 function openBudgetModal(existingCat){
