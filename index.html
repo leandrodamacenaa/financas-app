@@ -1013,8 +1013,8 @@ function totalAccountBalances(){
   return names.reduce((s,n)=>s+getAccountBalance(n), 0);
 }
 function saldoNubank(){
-  // saldo da conta (mantido manualmente) + reservas guardadas no Nubank
-  return getAccountBalance('Nubank') + (reservesTotals().byInst['Nubank']||0);
+  // apenas o saldo da conta em si (as reservas/caixinhas já aparecem separadas no card "Total em reservas")
+  return getAccountBalance('Nubank');
 }
 function saldoCaixa(){
   return getAccountBalance('Caixa');
