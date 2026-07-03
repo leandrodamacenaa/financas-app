@@ -1224,15 +1224,18 @@ function last12Competencias(){
   return arr;
 }
 function futureInstallmentCommitment(cardName){
+  // parcelas que ainda vão acontecer ALÉM da fatura atual e da próxima (que já são
+  // contadas via as movimentações reais) — evita contar duas vezes as parcelas
+  // que já geraram lançamento.
   return (DB.installments||[]).filter(i=>i.card===cardName && i.remainingInstallments>0)
-    .reduce((s,i)=>s+Number(i.installmentValue)*Number(i.remainingInstallments), 0);
+    .reduce((s,i)=>s+Number(i.installmentValue)*Math.max(0, Number(i.remainingInstallments)-2), 0);
 }
 function getAvailableLimit(c){
-  return Math.round((Number(c.limit) - getComputedInvoice(c) - futureInstallmentCommitment(c.name))*100)/100;
+  return Math.round((Number(c.limit) - getComputedInvoice(c) - getComputedNextInvoice(c) - futureInstallmentCommitment(c.name))*100)/100;
 }
 function cardTotals(){
   const totalCurrent = DB.cards.reduce((s,c)=>s+getComputedInvoice(c),0);
-  const totalNext = DB.cards.reduce((s,c)=>s+Number(c.nextInvoice),0);
+  const totalNext = DB.cards.reduce((s,c)=>s+getComputedNextInvoice(c),0);
   const totalLimit = DB.cards.reduce((s,c)=>s+Number(c.limit),0);
   const totalAvail = DB.cards.reduce((s,c)=>s+getAvailableLimit(c),0);
   return {totalCurrent, totalNext, totalLimit, totalAvail};
@@ -1294,6 +1297,7 @@ function migrateBaselines(){
   DB.cards.forEach(c=>{
     if(!c.invoiceBaselineDate){ c.invoiceBaselineDate = todayISO(); changed = true; }
     if(c.currentInvoice === undefined){ c.currentInvoice = 0; changed = true; }
+    if(c.nextInvoiceBaseline === undefined){ c.nextInvoiceBaseline = 0; changed = true; }
   });
   if(!DB.baselinesInitialized){
     DB.baselineExcludedIds = DB.movements.map(m=>m.id);
@@ -1305,7 +1309,10 @@ function migrateBaselines(){
 function freezeAllBaselines(){
   // Congela o valor calculado de CADA cartão/conta na baseline dele, sem perder nada,
   // antes de "esquecer" as movimentações já contadas.
-  DB.cards.forEach(c2=>{ c2.currentInvoice = getComputedInvoice(c2); });
+  DB.cards.forEach(c2=>{
+    c2.currentInvoice = getComputedInvoice(c2);
+    c2.nextInvoiceBaseline = getComputedNextInvoice(c2);
+  });
   DB.accountBalances = DB.accountBalances || {};
   ['Nubank','Caixa','PicPay','Neon','Mercado Pago'].forEach(name=>{
     DB.accountBalances[name] = getAccountBalance(name);
@@ -1327,11 +1334,49 @@ function totalAccountBalances(){
   const names = ['Nubank','Caixa','PicPay','Neon','Mercado Pago'];
   return names.reduce((s,n)=>s+getAccountBalance(n), 0);
 }
+function getInvoiceCycle(dateStr, closingDay){
+  // Devolve "AAAA-MM" do mês em que essa fatura fecha, considerando o dia de fechamento do cartão.
+  const [y,m,d] = dateStr.split('-').map(Number);
+  if(d <= closingDay){
+    return `${y}-${String(m).padStart(2,'0')}`;
+  }
+  const dt = new Date(y, m, 1); // rola pro mês seguinte corretamente (inclusive em dezembro)
+  return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}`;
+}
+function getCardCycles(closingDay){
+  // "Fatura atual" = o ciclo mais recente que JÁ FECHOU (aguardando pagamento).
+  // "Próxima fatura" = o ciclo que está aberto agora, acumulando até fechar no mês que vem.
+  const today = new Date();
+  let closedY = today.getFullYear(), closedM = today.getMonth(); // 0-indexed
+  if(today.getDate() <= closingDay){
+    // o fechamento deste mês ainda não aconteceu — o último fechamento foi mês passado
+    closedM -= 1;
+  }
+  const closedDate = new Date(closedY, closedM, 1);
+  const lastClosedCycle = `${closedDate.getFullYear()}-${String(closedDate.getMonth()+1).padStart(2,'0')}`;
+  const openDate = new Date(closedDate.getFullYear(), closedDate.getMonth()+1, 1);
+  const openCycle = `${openDate.getFullYear()}-${String(openDate.getMonth()+1).padStart(2,'0')}`;
+  return {lastClosedCycle, openCycle};
+}
 function getComputedInvoice(c){
+  // "Fatura atual" = tudo que já fechou (comprado até o dia de fechamento) e ainda não foi pago.
+  const {lastClosedCycle} = getCardCycles(c.closingDay);
   const baseline = Number(c.currentInvoice)||0;
   const excluded = DB.baselineExcludedIds || [];
   const delta = DB.movements
-    .filter(m=> m.account===c.name && m.paymentMethod==='Crédito' && m.type==='despesa' && !excluded.includes(m.id))
+    .filter(m=> m.account===c.name && m.paymentMethod==='Crédito' && m.type==='despesa' && !excluded.includes(m.id)
+      && getInvoiceCycle(m.date, c.closingDay) <= lastClosedCycle)
+    .reduce((s,m)=> s + Number(m.amount), 0);
+  return Math.round((baseline + delta)*100)/100;
+}
+function getComputedNextInvoice(c){
+  // "Próxima fatura" = comprado depois do fechamento, ainda acumulando pro ciclo que vai fechar no mês que vem.
+  const {openCycle} = getCardCycles(c.closingDay);
+  const baseline = Number(c.nextInvoiceBaseline)||0;
+  const excluded = DB.baselineExcludedIds || [];
+  const delta = DB.movements
+    .filter(m=> m.account===c.name && m.paymentMethod==='Crédito' && m.type==='despesa' && !excluded.includes(m.id)
+      && getInvoiceCycle(m.date, c.closingDay) === openCycle)
     .reduce((s,m)=> s + Number(m.amount), 0);
   return Math.round((baseline + delta)*100)/100;
 }
@@ -1623,7 +1668,7 @@ function creditCardHTML(c, withActions){
       <div class="cc-facts">
         <div class="row"><span>Saldo da conta</span><b>${fmtBRL(getAccountBalance(c.name))}</b></div>
         <div class="row"><span>Fatura atual</span><b>${fmtBRL(invoice)}</b></div>
-        <div class="row"><span>Próxima fatura</span><b>${fmtBRL(c.nextInvoice)}</b></div>
+        <div class="row"><span>Próxima fatura</span><b>${fmtBRL(getComputedNextInvoice(c))}</b></div>
         <div class="row"><span>Limite</span><b>${fmtBRL(c.limit)}</b></div>
         <div class="row"><span>Disponível</span><b>${fmtBRL(avail)}</b></div>
         <div class="row"><span>Vencimento</span><b>dia ${c.dueDay}</b></div>
@@ -1838,7 +1883,7 @@ function renderChartInvoices(){
     type:'bar',
     data:{labels:DB.cards.map(c=>c.name), datasets:[
       {label:'Fatura atual', data:DB.cards.map(c=>getComputedInvoice(c)), backgroundColor:'#ff5d7a', borderRadius:6},
-      {label:'Próxima fatura', data:DB.cards.map(c=>c.nextInvoice), backgroundColor:'#ffb84d', borderRadius:6},
+      {label:'Próxima fatura', data:DB.cards.map(c=>getComputedNextInvoice(c)), backgroundColor:'#ffb84d', borderRadius:6},
     ]},
     options:{
       responsive:true, maintainAspectRatio:false,
@@ -2234,11 +2279,11 @@ function openCardModal(name){
       <div class="field"><label>Limite total (R$)</label><input type="number" step="0.01" id="f_limit" value="${c.limit}"></div>
       <div class="field"><label>Fechamento (dia)</label><input type="number" min="1" max="31" id="f_closing" value="${c.closingDay}"></div>
       <div class="field"><label>Vencimento (dia)</label><input type="number" min="1" max="31" id="f_due" value="${c.dueDay}"></div>
-      <div class="field"><label>Corrigir fatura atual (R$)</label><input type="number" step="0.01" id="f_curr" value="${invoiceAtual}"></div>
-      <div class="field"><label>Próxima fatura (R$)</label><input type="number" step="0.01" id="f_next" value="${c.nextInvoice}"></div>
+      <div class="field full"><label>Corrigir fatura atual (R$)</label><input type="number" step="0.01" id="f_curr" value="${invoiceAtual}"></div>
     </div>
     <p style="font-size:11.5px; color:var(--text-dim); margin-top:4px;">
-      "Saldo da conta" e "Fatura atual" agora são calculados automaticamente a partir das suas Movimentações.
+      "Saldo da conta" e "Fatura atual" agora são calculados automaticamente a partir das suas Movimentações
+      (considerando o dia de fechamento pra separar fatura atual de próxima fatura).
       Só mexa nesses dois campos se precisar <b>corrigir</b> algo manualmente (ex: taxa do banco não lançada) —
       isso reinicia o cálculo a partir de hoje, sem apagar o que já foi lançado antes.
     </p>
@@ -2251,7 +2296,6 @@ function openCardModal(name){
     c.limit = parseFloat(document.getElementById('f_limit').value)||c.limit;
     c.closingDay = parseInt(document.getElementById('f_closing').value)||c.closingDay;
     c.dueDay = parseInt(document.getElementById('f_due').value)||c.dueDay;
-    c.nextInvoice = parseFloat(document.getElementById('f_next').value)||0;
 
     const newInvoice = parseFloat(document.getElementById('f_curr').value);
     const newSaldo = parseFloat(document.getElementById('f_saldo').value);
