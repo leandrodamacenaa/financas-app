@@ -116,8 +116,31 @@ button{cursor:pointer; border:none; background:none; color:inherit;}
 
 .hero-stats{display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; margin-bottom:24px;}
 @media(max-width:700px){.hero-stats{grid-template-columns:1fr;}}
+.sticky-bar{
+  position:sticky; top:0; z-index:40; margin:-26px -32px 18px; padding:10px 32px;
+  background:rgba(11,11,16,0.85); backdrop-filter:blur(10px); border-bottom:1px solid var(--border);
+  display:flex; align-items:center; gap:24px; font-size:12.5px; color:var(--text-dim);
+  opacity:0; transform:translateY(-8px); pointer-events:none; transition:all .2s ease;
+}
+.sticky-bar.show{opacity:1; transform:translateY(0); pointer-events:auto;}
+.sticky-bar b{color:var(--text); font-weight:700;}
+.sticky-bar .sb-green b{color:var(--green);}
+.sticky-bar .sb-accent b{color:var(--purple);}
+
 .gauge-wrap{display:flex; align-items:center; gap:14px;}
 .gauge-wrap svg{flex-shrink:0;}
+
+.dashboard-grid{display:grid; grid-template-columns:1fr 300px; gap:22px; align-items:start;}
+.dash-side{position:sticky; top:76px; display:flex; flex-direction:column; gap:12px;}
+.dash-side .side-panel-card{
+  background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:16px;
+}
+.dash-side .side-panel-card h4{font-size:12.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-dim); margin-bottom:10px;}
+@media(max-width:1300px){
+  .dashboard-grid{grid-template-columns:1fr;}
+  .dash-side{position:static; flex-direction:row; flex-wrap:wrap;}
+  .dash-side .side-panel-card{flex:1 1 260px;}
+}
 .hero-card{
   border-radius:22px; padding:26px 28px; position:relative; overflow:hidden;
   display:flex; flex-direction:column; gap:6px; min-height:118px; justify-content:center;
@@ -403,6 +426,7 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
   }
 
   .main{padding:16px 14px 100px;}
+  .sticky-bar{margin:-16px -14px 14px; padding:9px 14px; top:0; flex-wrap:wrap; gap:12px; font-size:11.5px;}
   .cc-grid{grid-template-columns:1fr;}
   .kpi-grid{grid-template-columns:repeat(2,1fr) !important;}
   .hero-stats{grid-template-columns:1fr;}
@@ -591,6 +615,8 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
       </div>
     </div>
 
+    <div class="sticky-bar" id="stickyBar"></div>
+
     <div class="hero-stats" id="heroStats"></div>
 
     <div class="filters-bar">
@@ -627,25 +653,36 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
       <div class="section-title"><div><h2>Alertas automáticos</h2><div class="sub">Fique de olho nesses pontos</div></div></div>
       <div class="alerts-panel" id="alertsPanel"></div>
 
-      <div class="section-title">
-        <div><h2>Central dos Cartões</h2><div class="sub">Resumo rápido — veja os detalhes completos na aba Cartões</div></div>
-      </div>
-      <div class="cards-central">
-        <div class="cc-header">
-          <h3>CENTRAL DOS CARTÕES</h3>
-          <div class="cc-summary" id="ccSummary"></div>
-        </div>
-        <div class="cc-grid" id="ccGrid"></div>
-      </div>
+      <div class="dashboard-grid">
+        <div class="dash-main">
+          <div class="section-title">
+            <div><h2>Central dos Cartões</h2><div class="sub">Resumo rápido — veja os detalhes completos na aba Cartões</div></div>
+          </div>
+          <div class="cards-central">
+            <div class="cc-header">
+              <h3>CENTRAL DOS CARTÕES</h3>
+              <div class="cc-summary" id="ccSummary"></div>
+            </div>
+            <div class="cc-grid" id="ccGrid"></div>
+          </div>
 
-      <div class="section-title"><div><h2>Análises</h2><div class="sub">Receitas, despesas e categorias</div></div></div>
-      <div class="charts-grid">
-        <div class="chart-card"><h4>Receitas x Despesas (12 meses)</h4><div class="chart-holder"><canvas id="chartRxD"></canvas></div></div>
-        <div class="chart-card"><h4>Gastos por categoria</h4><div class="chart-holder"><canvas id="chartCat"></canvas></div></div>
-      </div>
-      <div class="charts-grid" style="margin-top:16px;">
-        <div class="chart-card"><h4>Evolução das faturas por cartão</h4><div class="chart-holder small"><canvas id="chartInvoices"></canvas></div></div>
-        <div class="chart-card"><h4>Evolução das reservas</h4><div class="chart-holder small"><canvas id="chartReserves"></canvas></div></div>
+          <div class="section-title"><div><h2>Análises</h2><div class="sub">Receitas, despesas e categorias</div></div></div>
+          <div class="charts-grid">
+            <div class="chart-card"><h4>Receitas x Despesas (12 meses)</h4><div class="chart-holder"><canvas id="chartRxD"></canvas></div></div>
+            <div class="chart-card"><h4>Gastos por categoria</h4><div class="chart-holder"><canvas id="chartCat"></canvas></div></div>
+          </div>
+          <div class="charts-grid" style="margin-top:16px;">
+            <div class="chart-card"><h4>Evolução das faturas por cartão</h4><div class="chart-holder small"><canvas id="chartInvoices"></canvas></div></div>
+            <div class="chart-card"><h4>Evolução das reservas</h4><div class="chart-holder small"><canvas id="chartReserves"></canvas></div></div>
+          </div>
+          <div class="charts-grid" style="margin-top:16px;">
+            <div class="chart-card"><h4>Este mês x média dos últimos 6 meses</h4><div class="chart-holder small"><canvas id="chartComparison"></canvas></div></div>
+          </div>
+        </div>
+
+        <aside class="dash-side">
+          <div id="dashSidePanel"></div>
+        </aside>
       </div>
     </section>
 
@@ -1271,6 +1308,63 @@ function gaugeSVG(pct, color){
   </svg>`;
 }
 
+function renderStickyBar(){
+  const saldoTotal = totalAccountBalances();
+  const reserves = reservesTotals();
+  const t = cardTotals();
+  const instT = installmentsTotals();
+  const fixedT = fixedExpensesTotals();
+  const disponivelReal = saldoTotal + reserves.total - t.totalCurrent - t.totalNext - instT.monthlyCommitted - fixedT.monthlyTotal;
+  document.getElementById('stickyBar').innerHTML = `
+    <span class="sb-green">Saldo total: <b>${fmtBRL(saldoTotal)}</b></span>
+    <span class="${disponivelReal<0?'':'sb-accent'}">Disponível real: <b style="${disponivelReal<0?'color:var(--red);':''}">${fmtBRL(disponivelReal)}</b></span>
+  `;
+}
+let stickyBarScrollBound = false;
+function setupStickyBarScroll(){
+  if(stickyBarScrollBound) return;
+  stickyBarScrollBound = true;
+  window.addEventListener('scroll', ()=>{
+    const bar = document.getElementById('stickyBar');
+    if(!bar) return;
+    if(window.scrollY > 260) bar.classList.add('show');
+    else bar.classList.remove('show');
+  });
+}
+
+function renderDashSidePanel(){
+  const panel = document.getElementById('dashSidePanel');
+  if(!panel) return;
+  const alerts = computeAlerts().filter(a=>a.level!=='ok').slice(0,5);
+  const saldoTotal = totalAccountBalances();
+  const reserves = reservesTotals();
+  const t = cardTotals();
+  const instT = installmentsTotals();
+  const fixedT = fixedExpensesTotals();
+  const disponivelReal = saldoTotal + reserves.total - t.totalCurrent - t.totalNext - instT.monthlyCommitted - fixedT.monthlyTotal;
+
+  panel.innerHTML = `
+    <div class="side-panel-card">
+      <h4>Pendências</h4>
+      ${alerts.length===0 ? `<div style="font-size:12px; color:var(--text-dim);">Nenhuma pendência no momento 🎉</div>` :
+        alerts.map(a=>`
+          <div class="alert-mini" style="padding:6px 0;">
+            <span class="dot ${a.level}"></span>
+            <span style="font-size:12px;">${a.title}</span>
+          </div>`).join('')}
+    </div>
+    <div class="side-panel-card">
+      <h4>Resumo rápido</h4>
+      <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0; border-bottom:1px solid var(--border);">
+        <span style="color:var(--text-dim);">Saldo total</span><b>${fmtBRL(saldoTotal)}</b>
+      </div>
+      <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0;">
+        <span style="color:var(--text-dim);">Disponível real</span><b style="color:${disponivelReal<0?'var(--red)':'var(--green)'}">${fmtBRL(disponivelReal)}</b>
+      </div>
+    </div>
+  `;
+}
+
 function renderHeroStats(){
   const comp = currentCompetencia();
   const despesaMes = sumByTypeComp(comp,'despesa');
@@ -1586,6 +1680,34 @@ function renderChartInvoices(){
   });
 }
 
+function renderChartComparison(){
+  destroyChart('comparison');
+  const comps = last12Competencias();
+  const current = comps[comps.length-1];
+  const prev6 = comps.slice(-7, -1); // 6 meses antes do atual
+  const avgReceita = prev6.reduce((s,c)=>s+sumByTypeComp(c,'receita'),0) / (prev6.length||1);
+  const avgDespesa = prev6.reduce((s,c)=>s+sumByTypeComp(c,'despesa'),0) / (prev6.length||1);
+  const curReceita = sumByTypeComp(current,'receita');
+  const curDespesa = sumByTypeComp(current,'despesa');
+
+  charts.comparison = new Chart(document.getElementById('chartComparison'), {
+    type:'bar',
+    data:{
+      labels:['Receita','Despesa'],
+      datasets:[
+        {label:'Este mês', data:[curReceita, curDespesa], backgroundColor:['#2be08a','#ff5d7a'], borderRadius:6},
+        {label:'Média 6 meses', data:[avgReceita, avgDespesa], backgroundColor:['rgba(43,224,138,0.35)','rgba(255,93,122,0.35)'], borderRadius:6},
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{position:'top', align:'end', labels:{boxWidth:10, boxHeight:10, usePointStyle:true}},
+        tooltip:{callbacks:{label:(c)=> c.dataset.label+': '+fmtBRL(c.raw)}}},
+      scales:{x:{grid:{display:false}}, y:{grid:{color:'rgba(255,255,255,0.05)'}, ticks:{callback:(v)=>'R$ '+v}}}
+    }
+  });
+}
+
 function renderChartReserves(canvasId, chartKey){
   destroyChart(chartKey);
   const comps = last12Competencias();
@@ -1622,6 +1744,7 @@ function renderAllCharts(){
   safeRun(renderChartRxD, 'gráfico receitas x despesas');
   safeRun(renderChartCat, 'gráfico de categorias');
   safeRun(renderChartInvoices, 'gráfico de faturas');
+  safeRun(renderChartComparison, 'gráfico de comparação com média');
   safeRun(()=>renderChartReserves('chartReserves','res1'), 'gráfico de reservas');
   safeRun(()=>renderChartReserves('chartReserves2','res2'), 'gráfico de reservas (aba Reservas)');
 }
@@ -1819,6 +1942,19 @@ function openMovModal(id){
     }
 
     const payload = {date, type, category, description, account, paymentMethod, amount, competencia:competenciaOf(date)};
+
+    if(!editing){
+      const possibleDup = DB.movements.find(m=>
+        m.date===date && m.account===account &&
+        Math.abs(Number(m.amount)-amount)<0.01 &&
+        m.description.trim().toLowerCase()===description.trim().toLowerCase()
+      );
+      if(possibleDup){
+        const confirmDup = confirm(`Já existe uma movimentação parecida: "${possibleDup.description}" de ${fmtBRL(possibleDup.amount)} em ${fmtDate(possibleDup.date)} na conta ${possibleDup.account}.\n\nIsso pode ser um lançamento duplicado. Quer salvar mesmo assim?`);
+        if(!confirmDup) return;
+      }
+    }
+
     if(editing){ Object.assign(editing, payload); }
     else{ DB.movements.push({id:uid(), ...payload}); }
     saveDB(DB); closeModal(); renderAll(); showToast('Movimentação salva.');
@@ -2598,6 +2734,8 @@ function safeRun(fn, label){
 
 function renderAll(){
   safeRun(renderHeroStats, 'saldo em destaque');
+  safeRun(renderStickyBar, 'barra fixa');
+  safeRun(renderDashSidePanel, 'painel lateral');
   safeRun(renderKPIs, 'KPIs');
   safeRun(renderCardsCentral, 'Central dos Cartões');
   safeRun(renderAllCharts, 'gráficos');
@@ -2618,6 +2756,7 @@ function renderAll(){
 /* INIT */
 async function init(){
   renderNav();
+  setupStickyBarScroll();
   try{
     DB = await loadDB();
   }catch(e){
