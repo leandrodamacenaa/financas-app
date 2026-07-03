@@ -1289,11 +1289,12 @@ function last12Competencias(){
   return arr;
 }
 function futureInstallmentCommitment(cardName){
-  // parcelas que ainda vão acontecer ALÉM da fatura atual e da próxima (que já são
-  // contadas via as movimentações reais) — evita contar duas vezes as parcelas
-  // que já geraram lançamento.
-  return (DB.installments||[]).filter(i=>i.card===cardName && i.remainingInstallments>0)
-    .reduce((s,i)=>s+Number(i.installmentValue)*Math.max(0, Number(i.remainingInstallments)-2), 0);
+  // "Parcelas restantes" já é decrementado automaticamente toda vez que uma parcela
+  // vira movimentação (seja pelo motor automático, seja na criação) — então já
+  // representa exatamente o que ainda NÃO foi contado em nenhuma fatura, sem precisar
+  // de nenhuma conta extra pra evitar duplicidade.
+  return (DB.installments||[]).filter(i=>i.card===cardName && Number(i.remainingInstallments)>0)
+    .reduce((s,i)=> s + Number(i.installmentValue)*Number(i.remainingInstallments), 0);
 }
 function getAvailableLimit(c){
   return Math.round((Number(c.limit) - getComputedInvoice(c) - getComputedNextInvoice(c) - futureInstallmentCommitment(c.name))*100)/100;
@@ -2378,21 +2379,22 @@ function openMovModal(id){
       const parcelas = clamp(parseInt(document.getElementById('f_installment_count').value)||2, 2, 24);
       const installmentValue = Math.round((amount/parcelas)*100)/100;
       const installmentId = uid();
-      for(let k=0; k<parcelas; k++){
-        const parcelaDate = addMonthsToDate(date, k);
-        DB.movements.push({
-          id:uid(), date:parcelaDate, type:'despesa', category, account, paymentMethod,
-          description: `${description} (Parcela ${k+1}/${parcelas})`,
-          amount: installmentValue, competencia: competenciaOf(parcelaDate),
-          installmentId
-        });
-      }
+      // lança só a parcela de agora — as próximas são cuidadas sozinhas pelo motor
+      // automático (mesma lógica de "adicionar parcelamento existente"), evitando
+      // qualquer inconsistência entre os dois jeitos de parcelar.
+      DB.movements.push({
+        id:uid(), date, type:'despesa', category, account, paymentMethod,
+        description: `${description} (Parcela 1/${parcelas})`,
+        amount: installmentValue, competencia: competenciaOf(date),
+        installmentId
+      });
       DB.installments.push({
         id:installmentId, purchase:description, category, card:account, totalValue:amount,
-        installmentsCount:parcelas, installmentValue, purchaseDate:date, remainingInstallments:parcelas-1
+        installmentsCount:parcelas, installmentValue, purchaseDate:date, remainingInstallments:parcelas-1,
+        autoLaunchFrom: nextCompetencia(competenciaOf(date))
       });
       saveDB(DB); closeModal(); renderAll();
-      showToast(`Compra parcelada em ${parcelas}x de ${fmtBRL(installmentValue)} lançada.`);
+      showToast(`Compra parcelada em ${parcelas}x de ${fmtBRL(installmentValue)} lançada. As próximas parcelas entram sozinhas todo mês.`);
       return;
     }
 
