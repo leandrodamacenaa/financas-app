@@ -334,6 +334,31 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
 
 .empty-state{padding:40px 20px; text-align:center; color:var(--text-dim); font-size:13px;}
 
+/* ===== Calendário ===== */
+.cal-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:6px;}
+.cal-dow{text-align:center; font-size:11px; color:var(--text-dimmer); font-weight:700; padding:4px 0; text-transform:uppercase;}
+.cal-day{
+  min-height:78px; background:var(--card); border:1px solid var(--border); border-radius:10px;
+  padding:6px; display:flex; flex-direction:column; gap:4px;
+}
+.cal-day.empty{background:transparent; border:none;}
+.cal-day.today{border-color:var(--purple); box-shadow:0 0 0 1px var(--purple);}
+.cal-day .cal-num{font-size:12px; font-weight:700; color:var(--text-dim);}
+.cal-day.today .cal-num{color:var(--purple);}
+.cal-day .cal-dot{display:flex; gap:3px; flex-wrap:wrap;}
+.cal-day .cal-dot span{width:7px; height:7px; border-radius:50%; display:inline-block;}
+.cal-day .cal-items{font-size:9.5px; color:var(--text-dim); line-height:1.3; overflow:hidden;}
+
+/* ===== Orçamento / Metas ===== */
+.budget-item{
+  background:var(--card); border:1px solid var(--border); border-radius:var(--radius-sm);
+  padding:14px 16px; margin-bottom:10px;
+}
+.budget-item .bi-top{display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; font-size:13px;}
+.budget-item .bi-top b{font-size:13.5px;}
+.budget-bar{height:8px; border-radius:6px; background:rgba(255,255,255,0.06); overflow:hidden;}
+.budget-bar span{display:block; height:100%; border-radius:6px;}
+
 /* ===== FAB (botão flutuante de lançamento rápido) ===== */
 .fab{
   position:fixed; bottom:24px; right:24px; z-index:80;
@@ -554,7 +579,11 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
         <h1>Olá, Leandro! 👋</h1>
         <p>Aqui está o resumo da sua vida financeira</p>
       </div>
-      <div class="top-right">
+      <div class="top-right" style="align-items:flex-end;">
+        <button class="btn btn-sm" id="btnRefresh" style="margin-bottom:4px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6"/></svg>
+          Atualizar
+        </button>
         <b id="currentMonthLabel">—</b>
         <span id="lastUpdateLabel">—</span>
       </div>
@@ -587,6 +616,9 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
 
     <!-- ================= DASHBOARD VIEW ================= -->
     <section class="view active" id="view-dashboard">
+      <div style="display:flex; justify-content:flex-end; margin-bottom:14px;">
+        <button class="btn" id="btnMonthClosing">📋 Ver fechamento do mês</button>
+      </div>
       <div class="kpi-grid" id="kpiMain"></div>
       <div class="kpi-grid secondary" id="kpiSecondary"></div>
 
@@ -620,6 +652,9 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
       <div class="section-title">
         <div><h2>Movimentações</h2><div class="sub">Receitas e despesas registradas</div></div>
         <button class="btn btn-primary" id="btnAddMov">+ Nova movimentação</button>
+      </div>
+      <div class="field" style="max-width:340px; margin-bottom:14px;">
+        <input type="text" id="movSearch" placeholder="🔍 Buscar por descrição ou categoria...">
       </div>
       <div class="table-card">
         <table>
@@ -665,6 +700,38 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
           <tbody id="fixedTableBody"></tbody>
         </table>
       </div>
+    </section>
+
+    <!-- ================= METAS ================= -->
+    <section class="view" id="view-goals">
+      <div class="section-title">
+        <div><h2>Orçamento por categoria</h2><div class="sub">Defina um teto mensal e acompanhe quanto já gastou</div></div>
+        <button class="btn btn-primary" id="btnAddBudget">+ Definir orçamento</button>
+      </div>
+      <div id="budgetContainer" style="margin-bottom:32px;"></div>
+
+      <div class="section-title">
+        <div><h2>Meta de economia</h2><div class="sub">Baseada no total das suas reservas/caixinhas</div></div>
+        <button class="btn btn-primary" id="btnEditGoal">Definir meta</button>
+      </div>
+      <div id="savingsGoalContainer"></div>
+    </section>
+
+    <!-- ================= CALENDÁRIO ================= -->
+    <section class="view" id="view-calendar">
+      <div class="section-title">
+        <div><h2>Calendário financeiro</h2><div class="sub">Vencimentos de fatura, gastos fixos e eventos do mês</div></div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-sm" id="calPrevMonth">‹ Anterior</button>
+          <button class="btn btn-sm" id="calNextMonth">Próximo ›</button>
+        </div>
+      </div>
+      <div id="calendarLegend" style="display:flex; gap:16px; margin-bottom:14px; font-size:12px; color:var(--text-dim); flex-wrap:wrap;">
+        <span><span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--red); margin-right:5px;"></span>Vencimento de fatura</span>
+        <span><span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--amber); margin-right:5px;"></span>Gasto fixo</span>
+        <span><span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--purple); margin-right:5px;"></span>Evento</span>
+      </div>
+      <div id="calendarContainer"></div>
     </section>
 
     <!-- ================= CARTÕES ================= -->
@@ -884,7 +951,10 @@ function seedData(){
     {id:uid(), name:'Plano de celular', category:'Assinaturas', amount:49.90, billingDay:15, account:'Nubank', paymentMethod:'Crédito', active:true},
   ];
 
-  return {movements, events, cards, installments, reserves, accountBalances, fixedExpenses, meta:{createdAt:new Date().toISOString()}};
+  const budgets = {'Alimentação':500, 'Lazer':200, 'Transporte':250};
+  const savingsGoal = {name:'Reserva de emergência', target:5000, deadline:''};
+
+  return {movements, events, cards, installments, reserves, accountBalances, fixedExpenses, budgets, savingsGoal, meta:{createdAt:new Date().toISOString()}};
 }
 
 /* ============================================================
@@ -944,7 +1014,7 @@ async function saveDB(db){
 
 let DB = null;
 
-let FILTERS = {month:'', year:'', account:'', category:'', type:''};
+let FILTERS = {month:'', year:'', account:'', category:'', type:'', search:''};
 
 /* ============================================================
    NAV
@@ -954,6 +1024,8 @@ const NAV_ITEMS = [
   {id:'mov', label:'Movimentações', icon:'mov'},
   {id:'invoices', label:'Faturas', icon:'cards'},
   {id:'fixed', label:'Gastos Fixos', icon:'installments'},
+  {id:'goals', label:'Metas', icon:'reserves'},
+  {id:'calendar', label:'Calendário', icon:'events'},
   {id:'events', label:'Eventos', icon:'events'},
   {id:'cards', label:'Cartões', icon:'cards'},
   {id:'installments', label:'Parcelamentos', icon:'installments'},
@@ -1023,9 +1095,19 @@ function populateFilters(){
   });
   document.getElementById('clearFilters').addEventListener('click', ()=>{
     fMonth.value=''; fYear.value=''; fAccount.value=''; fCategory.value=''; document.getElementById('fType').value='';
-    FILTERS = {month:'', year:'', account:'', category:'', type:''};
+    const searchEl = document.getElementById('movSearch');
+    if(searchEl) searchEl.value = '';
+    FILTERS = {month:'', year:'', account:'', category:'', type:'', search:''};
     renderAll();
   });
+
+  const movSearchEl = document.getElementById('movSearch');
+  if(movSearchEl){
+    movSearchEl.addEventListener('input', ()=>{
+      FILTERS.search = movSearchEl.value;
+      renderMovTable();
+    });
+  }
 }
 
 function filteredMovements(){
@@ -1035,6 +1117,11 @@ function filteredMovements(){
     if(FILTERS.account && m.account !== FILTERS.account) return false;
     if(FILTERS.category && m.category !== FILTERS.category) return false;
     if(FILTERS.type && m.type !== FILTERS.type) return false;
+    if(FILTERS.search){
+      const q = FILTERS.search.toLowerCase();
+      const haystack = `${m.description} ${m.category}`.toLowerCase();
+      if(!haystack.includes(q)) return false;
+    }
     return true;
   }).sort((a,b)=> b.date.localeCompare(a.date));
 }
@@ -1991,6 +2078,207 @@ function openFixedExpenseModal(id){
   });
 }
 
+/* ============================================================
+   FECHAMENTO DO MÊS
+   ============================================================ */
+function openMonthClosingModal(){
+  const comp = currentCompetencia();
+  const prevComp = prevCompetencia(comp);
+  const receita = sumByTypeComp(comp,'receita');
+  const despesa = sumByTypeComp(comp,'despesa');
+  const saldo = receita - despesa;
+  const receitaPrev = sumByTypeComp(prevComp,'receita');
+  const despesaPrev = sumByTypeComp(prevComp,'despesa');
+
+  const byCat = {};
+  DB.movements.filter(m=>m.competencia===comp && m.type==='despesa').forEach(m=>{ byCat[m.category] = (byCat[m.category]||0) + Number(m.amount); });
+  const catEntries = Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
+  const topCat = catEntries[0];
+
+  const dR = pctDelta(receita, receitaPrev);
+  const dD = pctDelta(despesa, despesaPrev);
+
+  openModal(`
+    <div class="modal-head"><h3>Fechamento de ${MONTH_NAMES_FULL[new Date().getMonth()]}</h3><button id="modalClose">&times;</button></div>
+    <div class="form-grid" style="margin-bottom:14px;">
+      <div class="field"><label>Receita do mês</label><div style="font-size:18px; font-weight:800; color:var(--green);">${fmtBRL(receita)}</div><div style="font-size:11px; color:var(--text-dim);">${dR.txt}</div></div>
+      <div class="field"><label>Despesa do mês</label><div style="font-size:18px; font-weight:800; color:var(--red);">${fmtBRL(despesa)}</div><div style="font-size:11px; color:var(--text-dim);">${dD.txt}</div></div>
+      <div class="field full"><label>Saldo do mês</label><div style="font-size:22px; font-weight:800; color:${saldo>=0?'var(--green)':'var(--red)'};">${fmtBRL(saldo)}</div></div>
+      <div class="field full"><label>Categoria que mais pesou</label><div style="font-size:15px; font-weight:700;">${topCat ? `${topCat[0]} — ${fmtBRL(topCat[1])}` : '—'}</div></div>
+    </div>
+    <div style="font-size:12px; color:var(--text-dim); margin-bottom:6px;">Gastos por categoria:</div>
+    <div class="table-card" style="max-height:220px; overflow-y:auto;">
+      <table>
+        <tbody>
+          ${catEntries.map(([cat,val])=>`<tr><td>${cat}</td><td style="text-align:right; font-weight:700; color:var(--red);">${fmtBRL(val)}</td></tr>`).join('') || '<tr><td class="empty-state">Nenhuma despesa lançada esse mês ainda.</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="modalCancel">Fechar</button>
+    </div>
+  `);
+}
+
+
+let CALENDAR_OFFSET = 0;
+function renderCalendarView(){
+  const base = new Date();
+  const y = base.getFullYear();
+  const m = base.getMonth() + CALENDAR_OFFSET;
+  const viewDate = new Date(y, m, 1);
+  const viewY = viewDate.getFullYear(), viewM = viewDate.getMonth();
+  const daysInMonth = new Date(viewY, viewM+1, 0).getDate();
+  const firstDow = new Date(viewY, viewM, 1).getDay();
+  const todayStr = todayISO();
+
+  const titleEl = document.querySelector('#view-calendar .section-title h2');
+  if(titleEl) titleEl.textContent = `Calendário financeiro — ${MONTH_NAMES_FULL[viewM]} de ${viewY}`;
+
+  const eventsThisMonth = DB.events.filter(e=>e.date.slice(0,7)===`${viewY}-${String(viewM+1).padStart(2,'0')}`);
+
+  const dow = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  let html = dow.map(d=>`<div class="cal-dow">${d}</div>`).join('');
+  for(let i=0;i<firstDow;i++) html += `<div class="cal-day empty"></div>`;
+  for(let day=1; day<=daysInMonth; day++){
+    const dateStr = `${viewY}-${String(viewM+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const dots = [];
+    const items = [];
+    DB.cards.forEach(c=>{ if(c.dueDay===day){ dots.push('var(--red)'); items.push(`Fatura ${c.name}`); } });
+    (DB.fixedExpenses||[]).forEach(f=>{ if(f.active && f.billingDay===day){ dots.push('var(--amber)'); items.push(f.name); } });
+    eventsThisMonth.forEach(e=>{ if(Number(e.date.slice(8,10))===day){ dots.push('var(--purple)'); items.push(e.local); } });
+    const isToday = dateStr===todayStr;
+    html += `
+      <div class="cal-day ${isToday?'today':''}">
+        <div class="cal-num">${day}</div>
+        <div class="cal-dot">${dots.map(c=>`<span style="background:${c}"></span>`).join('')}</div>
+        <div class="cal-items">${items.slice(0,2).join('<br>')}${items.length>2?`<br>+${items.length-2}`:''}</div>
+      </div>`;
+  }
+  document.getElementById('calendarContainer').innerHTML = `<div class="cal-grid">${html}</div>`;
+}
+
+
+function renderBudgetView(){
+  const container = document.getElementById('budgetContainer');
+  const budgets = DB.budgets || {};
+  const cats = Object.keys(budgets);
+  if(cats.length===0){
+    container.innerHTML = `<div class="empty-state">Nenhum orçamento definido ainda. Clique em "+ Definir orçamento" pra criar um teto mensal por categoria.</div>`;
+    return;
+  }
+  const comp = currentCompetencia();
+  container.innerHTML = cats.map(cat=>{
+    const limit = Number(budgets[cat]);
+    const spent = DB.movements.filter(m=>m.category===cat && m.type==='despesa' && m.competencia===comp).reduce((s,m)=>s+Number(m.amount),0);
+    const pct = clamp((spent/limit)*100, 0, 999);
+    const color = pct>=100 ? 'var(--red)' : (pct>=80 ? 'var(--amber)' : 'var(--green)');
+    return `
+    <div class="budget-item">
+      <div class="bi-top">
+        <b>${cat}</b>
+        <span><span style="color:${color}; font-weight:700;">${fmtBRL(spent)}</span> <span style="color:var(--text-dim);">de ${fmtBRL(limit)}</span></span>
+      </div>
+      <div class="budget-bar"><span style="width:${Math.min(pct,100)}%; background:${color};"></span></div>
+      <div style="display:flex; justify-content:space-between; margin-top:6px;">
+        <span style="font-size:11px; color:var(--text-dim);">${pct.toFixed(0)}% do orçamento usado</span>
+        <div class="row-actions">
+          <button class="icon-btn" data-edit-budget="${cat}">${ICONS.edit}</button>
+          <button class="icon-btn" data-del-budget="${cat}">${ICONS.trash}</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  container.querySelectorAll('[data-edit-budget]').forEach(b=>b.addEventListener('click', ()=>openBudgetModal(b.dataset.editBudget)));
+  container.querySelectorAll('[data-del-budget]').forEach(b=>b.addEventListener('click', ()=>{
+    if(confirm(`Remover o orçamento de ${b.dataset.delBudget}?`)){
+      delete DB.budgets[b.dataset.delBudget];
+      saveDB(DB); renderAll(); showToast('Orçamento removido.');
+    }
+  }));
+}
+
+function openBudgetModal(existingCat){
+  const budgets = DB.budgets || {};
+  const editing = !!existingCat;
+  const availableCats = editing ? [existingCat] : CATEGORIES.filter(c=>!(c in budgets));
+  if(!editing && availableCats.length===0){ showToast('Todas as categorias já têm orçamento definido.'); return; }
+  openModal(`
+    <div class="modal-head"><h3>${editing?'Editar':'Novo'} orçamento</h3><button id="modalClose">&times;</button></div>
+    <div class="form-grid">
+      <div class="field"><label>Categoria</label><select id="f_bcat" ${editing?'disabled':''}>${availableCats.map(c=>`<option ${c===existingCat?'selected':''}>${c}</option>`).join('')}</select></div>
+      <div class="field"><label>Teto mensal (R$)</label><input type="number" step="0.01" id="f_blimit" value="${editing?budgets[existingCat]:''}"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" id="modalCancel">Cancelar</button>
+      <button class="btn btn-primary" id="modalSave">Salvar</button>
+    </div>
+  `);
+  document.getElementById('modalSave').addEventListener('click', ()=>{
+    const cat = editing ? existingCat : document.getElementById('f_bcat').value;
+    const limit = parseFloat(document.getElementById('f_blimit').value);
+    if(!cat || isNaN(limit) || limit<=0){ showToast('Preencha um valor válido.'); return; }
+    DB.budgets = DB.budgets || {};
+    DB.budgets[cat] = limit;
+    saveDB(DB); closeModal(); renderAll(); showToast('Orçamento salvo.');
+  });
+}
+
+function renderSavingsGoalView(){
+  const container = document.getElementById('savingsGoalContainer');
+  const goal = DB.savingsGoal;
+  if(!goal || !goal.target){
+    container.innerHTML = `<div class="empty-state">Nenhuma meta definida ainda. Clique em "Definir meta" pra criar uma.</div>`;
+    return;
+  }
+  const current = reservesTotals().total;
+  const pct = clamp((current/goal.target)*100, 0, 100);
+  let deadlineInfo = '';
+  if(goal.deadline){
+    const today = new Date(); const dl = new Date(goal.deadline+'T00:00:00');
+    const monthsLeft = Math.max(1, Math.round((dl-today)/(1000*60*60*24*30)));
+    const perMonth = Math.max(0, (goal.target-current)/monthsLeft);
+    deadlineInfo = `<div style="font-size:12px; color:var(--text-dim); margin-top:6px;">Prazo: ${fmtDate(goal.deadline)} — precisa guardar ${fmtBRL(perMonth)}/mês pra chegar lá.</div>`;
+  }
+  container.innerHTML = `
+    <div class="budget-item" style="padding:20px;">
+      <div class="bi-top"><b style="font-size:15px;">${goal.name || 'Meta de economia'}</b>
+        <div class="row-actions">
+          <button class="icon-btn" id="editGoalInline">${ICONS.edit}</button>
+        </div>
+      </div>
+      <div style="font-size:22px; font-weight:800; color:var(--green); margin-bottom:8px;">${fmtBRL(current)} <span style="font-size:13px; color:var(--text-dim); font-weight:400;">de ${fmtBRL(goal.target)}</span></div>
+      <div class="budget-bar" style="height:12px;"><span style="width:${pct}%; background:linear-gradient(90deg, var(--purple), var(--green));"></span></div>
+      <div style="font-size:12px; color:var(--text-dim); margin-top:6px;">${pct.toFixed(0)}% da meta alcançada</div>
+      ${deadlineInfo}
+    </div>`;
+  const editBtn = document.getElementById('editGoalInline');
+  if(editBtn) editBtn.addEventListener('click', openSavingsGoalModal);
+}
+
+function openSavingsGoalModal(){
+  const goal = DB.savingsGoal || {name:'', target:'', deadline:''};
+  openModal(`
+    <div class="modal-head"><h3>Meta de economia</h3><button id="modalClose">&times;</button></div>
+    <div class="form-grid">
+      <div class="field full"><label>Nome da meta</label><input type="text" id="f_gname" value="${goal.name||''}" placeholder="Ex: Reserva de emergência, Viagem..."></div>
+      <div class="field"><label>Valor alvo (R$)</label><input type="number" step="0.01" id="f_gtarget" value="${goal.target||''}"></div>
+      <div class="field"><label>Prazo (opcional)</label><input type="date" id="f_gdeadline" value="${goal.deadline||''}"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" id="modalCancel">Cancelar</button>
+      <button class="btn btn-primary" id="modalSave">Salvar</button>
+    </div>
+  `);
+  document.getElementById('modalSave').addEventListener('click', ()=>{
+    const target = parseFloat(document.getElementById('f_gtarget').value);
+    if(isNaN(target) || target<=0){ showToast('Preencha um valor alvo válido.'); return; }
+    DB.savingsGoal = {name:document.getElementById('f_gname').value, target, deadline:document.getElementById('f_gdeadline').value};
+    saveDB(DB); closeModal(); renderAll(); showToast('Meta salva.');
+  });
+}
+
 
 function openInstallmentModal(id){
   const editing = id ? DB.installments.find(i=>i.id===id) : null;
@@ -2178,6 +2466,20 @@ document.getElementById('btnAddMov').addEventListener('click', ()=>openMovModal(
 document.getElementById('hamburgerBtn').addEventListener('click', openMobileDrawer);
 document.getElementById('sidebarBackdrop').addEventListener('click', closeMobileDrawer);
 document.getElementById('fabAddMov').addEventListener('click', ()=>openMovModal(null));
+document.getElementById('btnRefresh').addEventListener('click', async ()=>{
+  const btn = document.getElementById('btnRefresh');
+  btn.disabled = true; btn.style.opacity = '.6';
+  try{
+    const result = await window.__fb.loadData(CURRENT_UID);
+    if(result){ DB = JSON.parse(result); }
+    renderAll();
+    showToast('Dados atualizados.');
+  }catch(e){
+    console.error('Erro ao atualizar:', e);
+    showToast('Não consegui atualizar agora — verifique sua conexão.');
+  }
+  btn.disabled = false; btn.style.opacity = '1';
+});
 document.getElementById('btnSaveCaixa').addEventListener('click', ()=>{
   const val = parseFloat(document.getElementById('f_saldo_caixa').value)||0;
   DB.accountBalances = DB.accountBalances || {};
@@ -2187,6 +2489,11 @@ document.getElementById('btnSaveCaixa').addEventListener('click', ()=>{
 document.getElementById('btnAddEvent').addEventListener('click', ()=>openEventModal(null));
 document.getElementById('btnAddInstallment').addEventListener('click', ()=>openInstallmentModal(null));
 document.getElementById('btnAddFixed').addEventListener('click', ()=>openFixedExpenseModal(null));
+document.getElementById('btnAddBudget').addEventListener('click', ()=>openBudgetModal(null));
+document.getElementById('btnEditGoal').addEventListener('click', ()=>openSavingsGoalModal());
+document.getElementById('calPrevMonth').addEventListener('click', ()=>{ CALENDAR_OFFSET--; renderCalendarView(); });
+document.getElementById('calNextMonth').addEventListener('click', ()=>{ CALENDAR_OFFSET++; renderCalendarView(); });
+document.getElementById('btnMonthClosing').addEventListener('click', openMonthClosingModal);
 document.getElementById('btnAddReserve').addEventListener('click', ()=>openReserveModal(null));
 
 /* ============================================================
@@ -2213,6 +2520,9 @@ function renderAll(){
   safeRun(renderEventsView, 'eventos');
   safeRun(renderInstallmentsView, 'parcelamentos');
   safeRun(renderFixedExpensesView, 'gastos fixos');
+  safeRun(renderBudgetView, 'orçamento');
+  safeRun(renderSavingsGoalView, 'meta de economia');
+  safeRun(renderCalendarView, 'calendário');
   safeRun(renderReservesView, 'reservas');
   safeRun(renderSettingsView, 'configurações');
   safeRun(updateLastUpdateLabel, 'data de atualização');
