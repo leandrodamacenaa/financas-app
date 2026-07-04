@@ -1296,7 +1296,9 @@ function futureInstallmentCommitment(cardName){
     .reduce((s,i)=> s + Number(i.installmentValue)*Number(i.remainingInstallments), 0);
 }
 function getAvailableLimit(c){
-  return Math.round((Number(c.limit) - getComputedInvoice(c) - getComputedNextInvoice(c) - futureInstallmentCommitment(c.name))*100)/100;
+  const computed = Number(c.limit) - getComputedInvoice(c) - getComputedNextInvoice(c) - futureInstallmentCommitment(c.name);
+  const adjustment = Number(c.availableLimitAdjustment)||0;
+  return Math.round((computed - adjustment)*100)/100;
 }
 function cardTotals(){
   const totalCurrent = DB.cards.reduce((s,c)=>s+getComputedInvoice(c),0);
@@ -1409,6 +1411,7 @@ function migrateBaselines(){
     if(!c.invoiceBaselineDate){ c.invoiceBaselineDate = todayISO(); changed = true; }
     if(c.currentInvoice === undefined){ c.currentInvoice = 0; changed = true; }
     if(c.nextInvoiceBaseline === undefined){ c.nextInvoiceBaseline = 0; changed = true; }
+    if(c.availableLimitAdjustment === undefined){ c.availableLimitAdjustment = 0; changed = true; }
   });
   if(!DB.baselinesInitialized){
     DB.baselineExcludedIds = DB.movements.map(m=>m.id);
@@ -2565,6 +2568,7 @@ function openCardModal(name){
   if(!c) return;
   const saldoConta = getAccountBalance(c.name);
   const invoiceAtual = getComputedInvoice(c);
+  const availAtual = getAvailableLimit(c);
   openModal(`
     <div class="modal-head"><h3>Editar ${c.name}</h3><button id="modalClose">&times;</button></div>
     <div class="form-grid">
@@ -2572,13 +2576,15 @@ function openCardModal(name){
       <div class="field"><label>Limite total (R$)</label><input type="number" step="0.01" id="f_limit" value="${c.limit}"></div>
       <div class="field"><label>Fechamento (dia)</label><input type="number" min="1" max="31" id="f_closing" value="${c.closingDay}"></div>
       <div class="field"><label>Vencimento (dia)</label><input type="number" min="1" max="31" id="f_due" value="${c.dueDay}"></div>
-      <div class="field full"><label>Corrigir fatura atual (R$)</label><input type="number" step="0.01" id="f_curr" value="${invoiceAtual}"></div>
+      <div class="field"><label>Corrigir fatura atual (R$)</label><input type="number" step="0.01" id="f_curr" value="${invoiceAtual}"></div>
+      <div class="field"><label>Corrigir limite disponível (R$)</label><input type="number" step="0.01" id="f_avail" value="${availAtual}"></div>
     </div>
     <p style="font-size:11.5px; color:var(--text-dim); margin-top:4px;">
-      "Saldo da conta" e "Fatura atual" agora são calculados automaticamente a partir das suas Movimentações
-      (considerando o dia de fechamento pra separar fatura atual de próxima fatura).
-      Só mexa nesses dois campos se precisar <b>corrigir</b> algo manualmente (ex: taxa do banco não lançada) —
-      isso reinicia o cálculo a partir de hoje, sem apagar o que já foi lançado antes.
+      "Saldo da conta", "Fatura atual" e "Limite disponível" são calculados automaticamente a partir das
+      suas Movimentações. Só mexa nesses campos se precisar <b>corrigir</b> pra bater com o que o banco mostra
+      (o banco às vezes reserva um pouco do limite por outros motivos, então o disponível pode não bater
+      perfeitamente com limite − fatura). Corrigir aqui não apaga nada do que já foi lançado — só ajusta o
+      cálculo daqui pra frente.
     </p>
     <div class="modal-actions">
       <button class="btn" id="modalCancel">Cancelar</button>
@@ -2592,8 +2598,10 @@ function openCardModal(name){
 
     const newInvoice = parseFloat(document.getElementById('f_curr').value);
     const newSaldo = parseFloat(document.getElementById('f_saldo').value);
+    const newAvail = parseFloat(document.getElementById('f_avail').value);
     const correctingInvoice = !isNaN(newInvoice) && Math.abs(newInvoice-invoiceAtual)>=0.01;
     const correctingSaldo = !isNaN(newSaldo) && Math.abs(newSaldo-saldoConta)>=0.01;
+    const correctingAvail = !isNaN(newAvail) && Math.abs(newAvail-availAtual)>=0.01;
 
     if(correctingInvoice || correctingSaldo){
       freezeAllBaselines(); // preserva o total calculado de tudo antes de mexer em qualquer coisa
@@ -2604,6 +2612,14 @@ function openCardModal(name){
         DB.accountBalancesAsOf[c.name] = todayISO();
       }
       finalizeBaselineReset();
+    }
+
+    if(correctingAvail){
+      // recalcula o "gap" entre o que a fórmula dá e o valor real do banco, e guarda
+      // esse ajuste — assim, lançamentos futuros continuam descontando certinho a
+      // partir do valor correto que você acabou de confirmar.
+      const computedNow = Number(c.limit) - getComputedInvoice(c) - getComputedNextInvoice(c) - futureInstallmentCommitment(c.name);
+      c.availableLimitAdjustment = Math.round((computedNow - newAvail)*100)/100;
     }
 
     saveDB(DB); closeModal(); renderAll(); showToast('Cartão atualizado.');
