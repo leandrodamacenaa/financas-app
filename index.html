@@ -1449,10 +1449,14 @@ function migrateBaselines(){
 }
 function freezeAllBaselines(){
   // Congela o valor calculado de CADA cartão/conta na baseline dele, sem perder nada,
-  // antes de "esquecer" as movimentações já contadas.
+  // antes de "esquecer" as movimentações já contadas. A data do ponto de partida fica
+  // marcada dentro do ciclo fechado, pra "fatura fechada" e "fatura atual em aberto"
+  // nunca se confundirem, mesmo com cartões de fechamento em dias diferentes.
   DB.cards.forEach(c2=>{
     c2.currentInvoice = getComputedInvoice(c2);
     c2.nextInvoiceBaseline = getComputedNextInvoice(c2);
+    const {lastClosedCycle} = getCardCycles(c2.closingDay);
+    c2.invoiceBaselineDate = `${lastClosedCycle}-01`;
   });
   DB.accountBalances = DB.accountBalances || {};
   ['Nubank','PicPay','Neon','Mercado Pago'].forEach(name=>{
@@ -1500,9 +1504,12 @@ function getCardCycles(closingDay){
   return {lastClosedCycle, openCycle};
 }
 function getComputedInvoice(c){
-  // "Fatura atual" = tudo que já fechou (comprado até o dia de fechamento) e ainda não foi pago.
+  // "Fatura fechada" = tudo que já fechou (comprado até o dia de fechamento) e ainda não foi pago.
+  // O ponto de partida (baseline) só entra aqui se ELE MESMO pertence a um ciclo já fechado —
+  // se foi salvo quando ainda estava em aberto, ele entra na fatura atual em aberto, não aqui.
   const {lastClosedCycle} = getCardCycles(c.closingDay);
-  const baseline = Number(c.currentInvoice)||0;
+  const baselineCycle = getInvoiceCycle(c.invoiceBaselineDate || todayISO(), c.closingDay);
+  const baseline = (baselineCycle <= lastClosedCycle) ? (Number(c.currentInvoice)||0) : 0;
   const excluded = DB.baselineExcludedIds || [];
   const delta = DB.movements
     .filter(m=> m.account===c.name && m.paymentMethod==='Crédito' && m.type==='despesa' && !excluded.includes(m.id)
@@ -1511,9 +1518,12 @@ function getComputedInvoice(c){
   return Math.round((baseline + delta)*100)/100;
 }
 function getComputedNextInvoice(c){
-  // "Próxima fatura" = comprado depois do fechamento, ainda acumulando pro ciclo que vai fechar no mês que vem.
-  const {openCycle} = getCardCycles(c.closingDay);
-  const baseline = Number(c.nextInvoiceBaseline)||0;
+  // "Fatura atual (em aberto)" = comprado depois do fechamento, ainda acumulando pro ciclo que vai
+  // fechar no mês que vem. Se o ponto de partida foi salvo enquanto ainda estava em aberto, ele entra aqui.
+  const {lastClosedCycle, openCycle} = getCardCycles(c.closingDay);
+  const baselineCycle = getInvoiceCycle(c.invoiceBaselineDate || todayISO(), c.closingDay);
+  let baseline = Number(c.nextInvoiceBaseline)||0;
+  if(baselineCycle > lastClosedCycle){ baseline += Number(c.currentInvoice)||0; }
   const excluded = DB.baselineExcludedIds || [];
   const delta = DB.movements
     .filter(m=> m.account===c.name && m.paymentMethod==='Crédito' && m.type==='despesa' && !excluded.includes(m.id)
@@ -2680,7 +2690,7 @@ function openCardModal(name){
 
     if(correctingInvoice || correctingSaldo){
       freezeAllBaselines(); // preserva o total calculado de tudo antes de mexer em qualquer coisa
-      if(correctingInvoice){ c.currentInvoice = newInvoice; c.invoiceBaselineDate = todayISO(); }
+      if(correctingInvoice){ c.currentInvoice = newInvoice; }
       if(correctingSaldo){
         DB.accountBalancesAsOf = DB.accountBalancesAsOf || {};
         DB.accountBalances[c.name] = newSaldo;
@@ -2732,7 +2742,6 @@ function openPayInvoiceModal(name){
     //    as movimentações já existentes — tudo ANTES de lançar o pagamento em si.
     freezeAllBaselines();
     c.currentInvoice = Math.max(0, Math.round((invoiceAtual-valor)*100)/100);
-    c.invoiceBaselineDate = data;
     finalizeBaselineReset();
 
     // 2) lança a saída na conta escolhida — o saldo dela é calculado a partir das
