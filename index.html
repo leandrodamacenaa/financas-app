@@ -2010,9 +2010,19 @@ function openLimitBreakdownModal(cardName){
       <div style="display:flex; justify-content:space-between; font-size:16px;"><span><b>= Limite disponível</b></span><b>${fmtBRL(avail)}</b></div>
     </div>
     <div class="modal-actions">
+      ${adjustment!==0 ? `<button class="btn" id="btnResetAdjustment">Zerar ajuste manual</button>` : ''}
       <button class="btn btn-primary" id="modalCancel">Fechar</button>
     </div>
   `);
+  const resetBtn = document.getElementById('btnResetAdjustment');
+  if(resetBtn){
+    resetBtn.addEventListener('click', ()=>{
+      if(!confirm(`Zerar o ajuste manual de ${cardName}? O limite disponível passa a usar só o cálculo automático (fatura fechada + fatura atual + parcelamentos), sem nenhuma correção por cima.`)) return;
+      c.availableLimitAdjustment = 0;
+      saveDB(DB); closeModal(); renderAll();
+      showToast('Ajuste manual zerado.');
+    });
+  }
 }
 
 function openFutureInvoicesModal(cardName){
