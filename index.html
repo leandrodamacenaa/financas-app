@@ -1432,6 +1432,13 @@ function migrateBaselines(){
     if(c.currentInvoice === undefined){ c.currentInvoice = 0; changed = true; }
     if(c.nextInvoiceBaseline === undefined){ c.nextInvoiceBaseline = 0; changed = true; }
     if(c.availableLimitAdjustment === undefined){ c.availableLimitAdjustment = 0; changed = true; }
+    if(!c.invoiceBaselineCycle){
+      // valor legado: assume que representa a fatura já FECHADA (comportamento clássico
+      // do app antes da distinção entre fechada/aberta existir).
+      const {lastClosedCycle} = getCardCycles(c.closingDay);
+      c.invoiceBaselineCycle = lastClosedCycle;
+      changed = true;
+    }
   });
   if(!DB.baselinesInitialized){
     DB.baselineExcludedIds = DB.movements.map(m=>m.id);
@@ -1449,13 +1456,13 @@ function migrateBaselines(){
 }
 function freezeAllBaselines(){
   // Congela o valor calculado de CADA cartão/conta na baseline dele, sem perder nada,
-  // antes de "esquecer" as movimentações já contadas. A data do ponto de partida fica
-  // marcada dentro do ciclo fechado, pra "fatura fechada" e "fatura atual em aberto"
-  // nunca se confundirem, mesmo com cartões de fechamento em dias diferentes.
+  // antes de "esquecer" as movimentações já contadas. Marcamos explicitamente a qual
+  // ciclo (fechado) esse valor pertence, sem depender de recalcular a partir de uma data.
   DB.cards.forEach(c2=>{
     c2.currentInvoice = getComputedInvoice(c2);
     c2.nextInvoiceBaseline = getComputedNextInvoice(c2);
     const {lastClosedCycle} = getCardCycles(c2.closingDay);
+    c2.invoiceBaselineCycle = lastClosedCycle;
     c2.invoiceBaselineDate = `${lastClosedCycle}-01`;
   });
   DB.accountBalances = DB.accountBalances || {};
@@ -1505,10 +1512,10 @@ function getCardCycles(closingDay){
 }
 function getComputedInvoice(c){
   // "Fatura fechada" = tudo que já fechou (comprado até o dia de fechamento) e ainda não foi pago.
-  // O ponto de partida (baseline) só entra aqui se ELE MESMO pertence a um ciclo já fechado —
-  // se foi salvo quando ainda estava em aberto, ele entra na fatura atual em aberto, não aqui.
+  // O ponto de partida só entra aqui se foi marcado explicitamente como pertencente a um ciclo já
+  // fechado (guardamos isso como um rótulo fixo "AAAA-MM", nunca recalculado a partir de uma data solta).
   const {lastClosedCycle} = getCardCycles(c.closingDay);
-  const baselineCycle = getInvoiceCycle(c.invoiceBaselineDate || todayISO(), c.closingDay);
+  const baselineCycle = c.invoiceBaselineCycle || lastClosedCycle;
   const baseline = (baselineCycle <= lastClosedCycle) ? (Number(c.currentInvoice)||0) : 0;
   const excluded = DB.baselineExcludedIds || [];
   const delta = DB.movements
@@ -1519,9 +1526,10 @@ function getComputedInvoice(c){
 }
 function getComputedNextInvoice(c){
   // "Fatura atual (em aberto)" = comprado depois do fechamento, ainda acumulando pro ciclo que vai
-  // fechar no mês que vem. Se o ponto de partida foi salvo enquanto ainda estava em aberto, ele entra aqui.
+  // fechar no mês que vem. Se o ponto de partida foi marcado como pertencente a esse ciclo aberto,
+  // ele entra aqui em vez de entrar na fatura fechada.
   const {lastClosedCycle, openCycle} = getCardCycles(c.closingDay);
-  const baselineCycle = getInvoiceCycle(c.invoiceBaselineDate || todayISO(), c.closingDay);
+  const baselineCycle = c.invoiceBaselineCycle || lastClosedCycle;
   let baseline = Number(c.nextInvoiceBaseline)||0;
   if(baselineCycle > lastClosedCycle){ baseline += Number(c.currentInvoice)||0; }
   const excluded = DB.baselineExcludedIds || [];
@@ -2652,7 +2660,8 @@ function openCardModal(name){
   const c = DB.cards.find(x=>x.name===name);
   if(!c) return;
   const saldoConta = getAccountBalance(c.name);
-  const invoiceAtual = getComputedInvoice(c);
+  const invoiceFechada = getComputedInvoice(c);
+  const invoiceAberta = getComputedNextInvoice(c);
   const availAtual = getAvailableLimit(c);
   openModal(`
     <div class="modal-head"><h3>Editar ${c.name}</h3><button id="modalClose">&times;</button></div>
@@ -2661,15 +2670,16 @@ function openCardModal(name){
       <div class="field"><label>Limite total (R$)</label><input type="number" step="0.01" id="f_limit" value="${c.limit}"></div>
       <div class="field"><label>Fechamento (dia)</label><input type="number" min="1" max="31" id="f_closing" value="${c.closingDay}"></div>
       <div class="field"><label>Vencimento (dia)</label><input type="number" min="1" max="31" id="f_due" value="${c.dueDay}"></div>
-      <div class="field"><label>Corrigir fatura atual (R$)</label><input type="number" step="0.01" id="f_curr" value="${invoiceAtual}"></div>
-      <div class="field"><label>Corrigir limite disponível (R$)</label><input type="number" step="0.01" id="f_avail" value="${availAtual}"></div>
+      <div class="field"><label>Corrigir fatura fechada (R$)</label><input type="number" step="0.01" id="f_curr" value="${invoiceFechada}"></div>
+      <div class="field"><label>Corrigir fatura atual — em aberto (R$)</label><input type="number" step="0.01" id="f_next" value="${invoiceAberta}"></div>
+      <div class="field full"><label>Corrigir limite disponível (R$)</label><input type="number" step="0.01" id="f_avail" value="${availAtual}"></div>
     </div>
     <p style="font-size:11.5px; color:var(--text-dim); margin-top:4px;">
-      "Saldo da conta", "Fatura atual" e "Limite disponível" são calculados automaticamente a partir das
-      suas Movimentações. Só mexa nesses campos se precisar <b>corrigir</b> pra bater com o que o banco mostra
-      (o banco às vezes reserva um pouco do limite por outros motivos, então o disponível pode não bater
-      perfeitamente com limite − fatura). Corrigir aqui não apaga nada do que já foi lançado — só ajusta o
-      cálculo daqui pra frente.
+      "Saldo da conta", as duas faturas e o "Limite disponível" são calculados automaticamente a partir das
+      suas Movimentações. Só mexa nesses campos se precisar <b>corrigir</b> pra bater com o que o banco mostra.
+      Se o cartão ainda não fechou esse mês, a "fatura fechada" deve ficar em R$ 0 — o valor todo entra em
+      "fatura atual (em aberto)". Corrigir aqui não apaga nada do que já foi lançado — só ajusta o cálculo
+      daqui pra frente.
     </p>
     <div class="modal-actions">
       <button class="btn" id="modalCancel">Cancelar</button>
@@ -2682,15 +2692,18 @@ function openCardModal(name){
     c.dueDay = parseInt(document.getElementById('f_due').value)||c.dueDay;
 
     const newInvoice = parseFloat(document.getElementById('f_curr').value);
+    const newNextInvoice = parseFloat(document.getElementById('f_next').value);
     const newSaldo = parseFloat(document.getElementById('f_saldo').value);
     const newAvail = parseFloat(document.getElementById('f_avail').value);
-    const correctingInvoice = !isNaN(newInvoice) && Math.abs(newInvoice-invoiceAtual)>=0.01;
+    const correctingInvoice = !isNaN(newInvoice) && Math.abs(newInvoice-invoiceFechada)>=0.01;
+    const correctingNextInvoice = !isNaN(newNextInvoice) && Math.abs(newNextInvoice-invoiceAberta)>=0.01;
     const correctingSaldo = !isNaN(newSaldo) && Math.abs(newSaldo-saldoConta)>=0.01;
     const correctingAvail = !isNaN(newAvail) && Math.abs(newAvail-availAtual)>=0.01;
 
-    if(correctingInvoice || correctingSaldo){
+    if(correctingInvoice || correctingNextInvoice || correctingSaldo){
       freezeAllBaselines(); // preserva o total calculado de tudo antes de mexer em qualquer coisa
       if(correctingInvoice){ c.currentInvoice = newInvoice; }
+      if(correctingNextInvoice){ c.nextInvoiceBaseline = newNextInvoice; }
       if(correctingSaldo){
         DB.accountBalancesAsOf = DB.accountBalancesAsOf || {};
         DB.accountBalances[c.name] = newSaldo;
