@@ -941,7 +941,7 @@ const STORAGE_KEY = 'findash_v3';
 
 const CATEGORIES = ['Alimentação','Transporte','Saúde','Faculdade','Tecnologia','Lazer','Assinaturas','Moradia','Vestuário','Financeiro','Outros'];
 const PAYMENT_METHODS = ['Pix','Débito','Crédito','Transferência','Dinheiro'];
-const ACCOUNTS = ['Nubank','Caixa','PicPay','Neon','Mercado Pago'];
+const ACCOUNTS = ['Nubank','PicPay','Neon','Mercado Pago'];
 const CARD_NAMES = ['Nubank','PicPay','Neon','Mercado Pago'];
 const CARD_COLORS = {'Nubank':'#9b6bff','PicPay':'#2be08a','Neon':'#5ac8fa','Mercado Pago':'#ffb84d'};
 const CARD_ICONS = {
@@ -1039,7 +1039,7 @@ function mulberry32(seed){
 function seedData(){
   // Dados reais importados de CONTROLE_DE_CONTAS.xlsx
   const movements = [
-    {id:uid(), date:'2026-06-01', type:'receita', category:'Outros', description:'Bolsa Medicina', account:'Caixa', paymentMethod:'Transferência', amount:700, competencia:'2026-06'},
+    {id:uid(), date:'2026-06-01', type:'receita', category:'Outros', description:'Bolsa Medicina', account:'Nubank', paymentMethod:'Transferência', amount:700, competencia:'2026-06'},
     {id:uid(), date:'2026-06-05', type:'receita', category:'Outros', description:'Evento', account:'Nubank', paymentMethod:'Transferência', amount:350, competencia:'2026-06'},
     {id:uid(), date:'2026-06-10', type:'despesa', category:'Alimentação', description:'Mercado', account:'Nubank', paymentMethod:'Crédito', amount:120, competencia:'2026-06'},
     {id:uid(), date:'2026-07-12', type:'despesa', category:'Tecnologia', description:'Parcela Iphone', account:'Nubank', paymentMethod:'Crédito', amount:420, competencia:'2026-07'},
@@ -1086,9 +1086,9 @@ function seedData(){
   ];
 
   // Saldo atual de cada conta — ponto de partida a partir de hoje; lançamentos futuros somam/subtraem sozinhos
-  const accountBalances = {'Nubank':2926.98, 'Caixa':700, 'PicPay':0.58, 'Neon':100, 'Mercado Pago':89.73};
+  const accountBalances = {'Nubank':2926.98, 'PicPay':0.58, 'Neon':100, 'Mercado Pago':89.73};
   const todayStr = todayISO();
-  const accountBalancesAsOf = {'Nubank':todayStr, 'Caixa':todayStr, 'PicPay':todayStr, 'Neon':todayStr, 'Mercado Pago':todayStr};
+  const accountBalancesAsOf = {'Nubank':todayStr, 'PicPay':todayStr, 'Neon':todayStr, 'Mercado Pago':todayStr};
 
   const fixedExpenses = [
     {id:uid(), name:'Spotify', category:'Assinaturas', amount:21.90, billingDay:10, account:'Neon', paymentMethod:'Crédito', active:true},
@@ -1423,7 +1423,7 @@ function migrateBaselines(){
   DB.accountBalances = DB.accountBalances || {};
   DB.accountBalancesAsOf = DB.accountBalancesAsOf || {};
   DB.baselineExcludedIds = DB.baselineExcludedIds || [];
-  ['Nubank','Caixa','PicPay','Neon','Mercado Pago'].forEach(name=>{
+  ['Nubank','PicPay','Neon','Mercado Pago'].forEach(name=>{
     if(!DB.accountBalancesAsOf[name]){ DB.accountBalancesAsOf[name] = todayISO(); changed = true; }
     if(DB.accountBalances[name] === undefined){ DB.accountBalances[name] = 0; changed = true; }
   });
@@ -1455,7 +1455,7 @@ function freezeAllBaselines(){
     c2.nextInvoiceBaseline = getComputedNextInvoice(c2);
   });
   DB.accountBalances = DB.accountBalances || {};
-  ['Nubank','Caixa','PicPay','Neon','Mercado Pago'].forEach(name=>{
+  ['Nubank','PicPay','Neon','Mercado Pago'].forEach(name=>{
     DB.accountBalances[name] = getAccountBalance(name);
   });
 }
@@ -1472,7 +1472,7 @@ function getAccountBalance(name){
   return Math.round((baseline + delta)*100)/100;
 }
 function totalAccountBalances(){
-  const names = ['Nubank','Caixa','PicPay','Neon','Mercado Pago'];
+  const names = ['Nubank','PicPay','Neon','Mercado Pago'];
   return names.reduce((s,n)=>s+getAccountBalance(n), 0);
 }
 function getInvoiceCycle(dateStr, closingDay){
@@ -1743,7 +1743,7 @@ function renderHeroStats(){
     <div class="hero-card balance">
       <div class="hero-label"><span class="hero-icon">${ICONS.reserves}</span>Saldo total (contas)</div>
       <div class="hero-value" id="heroSaldoTotal">${fmtBRL(0)}</div>
-      <div class="hero-sub">Somando Nubank, Caixa, PicPay, Neon e Mercado Pago — sem contar as reservas/caixinhas</div>
+      <div class="hero-sub">Somando Nubank, PicPay, Neon e Mercado Pago — sem contar as reservas/caixinhas</div>
     </div>
     <div class="hero-card spent">
       <div class="hero-label"><span class="hero-icon">${ICONS.down}</span>Esse mês</div>
