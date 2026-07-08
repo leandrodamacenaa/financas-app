@@ -663,36 +663,36 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
       <div class="sticky-bar" id="stickyBar"></div>
 
       <div class="hero-stats" id="heroStats"></div>
+    </div>
 
-      <div class="filters-bar">
-        <div class="field"><label>Mês</label>
-          <select id="fMonth"></select>
-        </div>
-        <div class="field"><label>Ano</label>
-          <select id="fYear"></select>
-        </div>
-        <div class="field"><label>Conta/Cartão</label>
-          <select id="fAccount"></select>
-        </div>
-        <div class="field"><label>Categoria</label>
-          <select id="fCategory"></select>
-        </div>
-        <div class="field"><label>Tipo</label>
-          <select id="fType">
-            <option value="">Todos</option>
-            <option value="receita">Receita</option>
-            <option value="despesa">Despesa</option>
-          </select>
-        </div>
-        <div class="field"><label>Mostrar</label>
-          <select id="fShow">
-            <option value="">Tudo</option>
-            <option value="parcelamentos">Só parcelamentos</option>
-            <option value="fixos">Só gastos fixos</option>
-          </select>
-        </div>
-        <button class="clear-filters" id="clearFilters">Limpar filtros</button>
+    <div id="filtersBarWrap" class="filters-bar">
+      <div class="field"><label>Mês</label>
+        <select id="fMonth"></select>
       </div>
+      <div class="field"><label>Ano</label>
+        <select id="fYear"></select>
+      </div>
+      <div class="field"><label>Conta/Cartão</label>
+        <select id="fAccount"></select>
+      </div>
+      <div class="field"><label>Categoria</label>
+        <select id="fCategory"></select>
+      </div>
+      <div class="field"><label>Tipo</label>
+        <select id="fType">
+          <option value="">Todos</option>
+          <option value="receita">Receita</option>
+          <option value="despesa">Despesa</option>
+        </select>
+      </div>
+      <div class="field"><label>Mostrar</label>
+        <select id="fShow">
+          <option value="">Tudo</option>
+          <option value="parcelamentos">Só parcelamentos</option>
+          <option value="fixos">Só gastos fixos</option>
+        </select>
+      </div>
+      <button class="clear-filters" id="clearFilters">Limpar filtros</button>
     </div>
 
     <!-- ================= DASHBOARD VIEW ================= -->
@@ -716,6 +716,7 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
           </div>
 
           <div class="section-title"><div><h2>Análises</h2><div class="sub">Receitas, despesas e categorias — clique numa categoria pra ver o detalhe</div></div></div>
+          <div id="filtersSlotAnalises" style="margin-bottom:16px;"></div>
           <div class="charts-grid">
             <div class="chart-card"><h4>Receitas x Despesas (12 meses)</h4><div class="chart-holder"><canvas id="chartRxD"></canvas></div></div>
             <div class="chart-card">
@@ -750,6 +751,7 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
         <div><h2>Movimentações</h2><div class="sub">Receitas e despesas registradas</div></div>
         <button class="btn btn-primary" id="btnAddMov">+ Nova movimentação</button>
       </div>
+      <div id="filtersSlotMov" style="margin-bottom:14px;"></div>
       <div class="field" style="max-width:340px; margin-bottom:14px;">
         <input type="text" id="movSearch" placeholder="🔍 Buscar por descrição ou categoria...">
       </div>
@@ -1179,6 +1181,22 @@ const NAV_ITEMS = [
   {id:'settings', label:'Configurações', icon:'settings'},
 ];
 
+function relocateFiltersBar(view){
+  const bar = document.getElementById('filtersBarWrap');
+  if(!bar) return;
+  if(view === 'mov'){
+    const slot = document.getElementById('filtersSlotMov');
+    if(slot && bar.parentElement !== slot) slot.appendChild(bar);
+    bar.style.display = '';
+  } else if(view === 'dashboard'){
+    const slot = document.getElementById('filtersSlotAnalises');
+    if(slot && bar.parentElement !== slot) slot.appendChild(bar);
+    bar.style.display = '';
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
 function renderNav(){
   const nav = document.getElementById('navMenu');
   nav.innerHTML = NAV_ITEMS.map(it=>`
@@ -1194,6 +1212,7 @@ function renderNav(){
       document.getElementById('view-'+btn.dataset.view).classList.add('active');
       const headerBlock = document.getElementById('globalHeaderBlock');
       if(headerBlock) headerBlock.style.display = (btn.dataset.view==='dashboard' || btn.dataset.view==='mov') ? '' : 'none';
+      relocateFiltersBar(btn.dataset.view);
       closeMobileDrawer();
       const mainEl = document.querySelector('.main');
       if(mainEl) mainEl.scrollTop = 0;
@@ -3627,6 +3646,7 @@ function renderAll(){
 async function init(){
   renderNav();
   setupStickyBarScroll();
+  relocateFiltersBar('dashboard');
   try{
     DB = await loadDB();
     if(migrateBaselines()){ await saveDB(DB); }
