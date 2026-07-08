@@ -20,8 +20,9 @@
   --card2:#1a1a24;
   --border:rgba(255,255,255,0.08);
   --text:#f4f4f7;
-  --text-dim:#8a8a9c;
-  --text-dimmer:#5c5c6e;
+  --text-dim:#a8a8bc;
+  --text-dimmer:#7d7d92;
+  --text-secondary:#c2c2d6;
   --green:#2be08a;
   --red:#ff5d7a;
   --purple:#9b6bff;
@@ -243,6 +244,16 @@ button{cursor:pointer; border:none; background:none; color:inherit;}
 .cc-summary div b{display:block; font-size:14px; color:var(--text); margin-top:2px; font-weight:700;}
 
 .cc-grid{display:grid; grid-template-columns:repeat(4, 1fr); gap:16px;}
+.cc-bar-list{display:flex; flex-direction:column; gap:12px;}
+.cc-bar-row{background:var(--card2); border:1px solid var(--border); border-radius:14px; padding:16px;}
+.cc-bar-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;}
+.cc-bar-track{height:10px; border-radius:6px; background:rgba(255,255,255,0.06); overflow:hidden; margin-bottom:12px;}
+.cc-bar-track span{display:block; height:100%; border-radius:6px; transition:width .3s ease;}
+.cc-bar-stats{display:flex; flex-wrap:wrap; align-items:center; gap:22px;}
+.cc-bar-stats > div{display:flex; flex-direction:column; gap:2px;}
+.cc-bar-stats b{font-size:14.5px;}
+.cc-bar-stats .btn{margin-left:auto;}
+@media(max-width:640px){.cc-bar-stats{gap:14px;} .cc-bar-stats .btn{margin-left:0; width:100%;}}
 @media(max-width:1300px){.cc-grid{grid-template-columns:repeat(2,1fr);}}
 @media(max-width:640px){.cc-grid{grid-template-columns:1fr;}}
 
@@ -254,10 +265,10 @@ button{cursor:pointer; border:none; background:none; color:inherit;}
 .credit-card .cc-name{display:flex; align-items:center; gap:10px; margin-bottom:6px;}
 .credit-card .cc-name b{font-size:15px; font-weight:700;}
 .cc-brand-dot{width:10px; height:10px; border-radius:50%; box-shadow:0 0 8px currentColor;}
-.cc-label{font-size:10px; letter-spacing:.05em; color:var(--text-dimmer); font-weight:700; text-transform:uppercase;}
+.cc-label{font-size:11px; letter-spacing:.04em; color:var(--text-secondary); font-weight:700; text-transform:uppercase;}
 .cc-value-sm{font-size:14px; font-weight:700; margin-top:2px; margin-bottom:6px; white-space:nowrap;}
 .cc-value-md{font-size:19px; font-weight:800; margin-top:2px; white-space:nowrap;}
-.cc-sub{font-size:10.5px; color:var(--text-dim); margin-top:1px;}
+.cc-sub{font-size:11.5px; color:var(--text-secondary); margin-top:1px;}
 .cc-divider{height:1px; background:var(--border); margin:8px 0;}
 .cc-body{display:flex; flex-direction:column; align-items:center; gap:10px; margin-top:8px; text-align:center;}
 .ring-wrap{position:relative; width:84px; height:84px; flex-shrink:0;}
@@ -673,6 +684,13 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
             <option value="despesa">Despesa</option>
           </select>
         </div>
+        <div class="field"><label>Mostrar</label>
+          <select id="fShow">
+            <option value="">Tudo</option>
+            <option value="parcelamentos">Só parcelamentos</option>
+            <option value="fixos">Só gastos fixos</option>
+          </select>
+        </div>
         <button class="clear-filters" id="clearFilters">Limpar filtros</button>
       </div>
     </div>
@@ -683,7 +701,6 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
         <button class="btn" id="btnMonthClosing">📋 Ver fechamento do mês</button>
       </div>
       <div class="kpi-grid" id="kpiMain"></div>
-      <div class="kpi-grid secondary" id="kpiSecondary"></div>
 
       <div class="dashboard-grid">
         <div class="dash-main">
@@ -695,7 +712,7 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
               <h3>CENTRAL DOS CARTÕES</h3>
               <div class="cc-summary" id="ccSummary"></div>
             </div>
-            <div class="cc-grid" id="ccGrid"></div>
+            <div class="cc-bar-list" id="ccGrid"></div>
           </div>
 
           <div class="section-title"><div><h2>Análises</h2><div class="sub">Receitas, despesas e categorias — clique numa categoria pra ver o detalhe</div></div></div>
@@ -1144,7 +1161,7 @@ async function saveDB(db){
 
 let DB = null;
 
-let FILTERS = {month:'', year:'', account:'', category:'', type:'', search:''};
+let FILTERS = {month:'', year:'', account:'', category:'', type:'', search:'', show:''};
 
 /* ============================================================
    NAV
@@ -1226,11 +1243,13 @@ function populateFilters(){
   });
   document.getElementById('clearFilters').addEventListener('click', ()=>{
     fMonth.value=''; fYear.value=''; fAccount.value=''; fCategory.value=''; document.getElementById('fType').value='';
+    document.getElementById('fShow').value='';
     const searchEl = document.getElementById('movSearch');
     if(searchEl) searchEl.value = '';
-    FILTERS = {month:'', year:'', account:'', category:'', type:'', search:''};
+    FILTERS = {month:'', year:'', account:'', category:'', type:'', search:'', show:''};
     renderAll();
   });
+  document.getElementById('fShow').addEventListener('change', (e)=>{ FILTERS.show = e.target.value; renderAll(); });
 
   const movSearchEl = document.getElementById('movSearch');
   if(movSearchEl){
@@ -1248,6 +1267,8 @@ function filteredMovements(){
     if(FILTERS.account && m.account !== FILTERS.account) return false;
     if(FILTERS.category && m.category !== FILTERS.category) return false;
     if(FILTERS.type && m.type !== FILTERS.type) return false;
+    if(FILTERS.show === 'parcelamentos' && !m.installmentId) return false;
+    if(FILTERS.show === 'fixos' && !m.fixedExpenseId) return false;
     if(FILTERS.search){
       const q = FILTERS.search.toLowerCase();
       const haystack = `${m.description} ${m.category}`.toLowerCase();
@@ -1701,6 +1722,7 @@ function renderMoodIndicator(disponivelReal){
 
 function renderHeroStats(){
   const comp = currentCompetencia();
+  const receitaMes = sumByTypeComp(comp,'receita');
   const despesaMes = sumByTypeComp(comp,'despesa');
   const saldoTotal = totalAccountBalances();
 
@@ -1724,9 +1746,11 @@ function renderHeroStats(){
       <div class="hero-sub">Somando Nubank, Caixa, PicPay, Neon e Mercado Pago — sem contar as reservas/caixinhas</div>
     </div>
     <div class="hero-card spent">
-      <div class="hero-label"><span class="hero-icon">${ICONS.down}</span>Gasto no mês</div>
-      <div class="hero-value" id="heroGastoMes">${fmtBRL(0)}</div>
-      <div class="hero-sub">Total de despesas lançadas em ${MONTH_NAMES_FULL[new Date().getMonth()]}</div>
+      <div class="hero-label"><span class="hero-icon">${ICONS.down}</span>Esse mês</div>
+      <div style="display:flex; gap:18px; align-items:baseline; flex-wrap:wrap;">
+        <div><span class="hero-value" id="heroGanhoMes" style="font-size:22px; color:var(--green);">${fmtBRL(0)}</span><div class="hero-sub" style="margin:0;">ganhei</div></div>
+        <div><span class="hero-value" id="heroGastoMes" style="font-size:22px; color:var(--red);">${fmtBRL(0)}</span><div class="hero-sub" style="margin:0;">gastei</div></div>
+      </div>
     </div>
     <div class="hero-card" style="background:radial-gradient(circle at 85% 0%, ${gaugeColor}22, transparent 60%), linear-gradient(160deg, var(--card2), var(--card));">
       <div class="hero-label"><span class="hero-icon">${ICONS.dashboard}</span>Disponível real</div>
@@ -1740,55 +1764,25 @@ function renderHeroStats(){
     </div>
   `;
   animateCountUp(document.getElementById('heroSaldoTotal'), saldoTotal, true);
+  animateCountUp(document.getElementById('heroGanhoMes'), receitaMes, true);
   animateCountUp(document.getElementById('heroGastoMes'), despesaMes, true);
   animateCountUp(document.getElementById('heroDisponivel'), disponivelReal, true);
   renderMoodIndicator(disponivelReal);
 }
 
 function renderKPIs(){
-  const comp = currentCompetencia();
-  const prevComp = prevCompetencia(comp);
-  const receitaMes = sumByTypeComp(comp,'receita');
-  const receitaPrev = sumByTypeComp(prevComp,'receita');
-  const despesaMes = sumByTypeComp(comp,'despesa');
-  const despesaPrev = sumByTypeComp(prevComp,'despesa');
-  const saldoMes = receitaMes - despesaMes;
-  const saldoPrev = receitaPrev - despesaPrev;
-  const {totalCurrent, totalNext, totalLimit, totalAvail} = cardTotals();
+  const {totalCurrent, totalNext, totalAvail} = cardTotals();
   const ev = eventsTotals();
-
-  const last6 = last12Competencias().slice(-6);
-  const receitaSpark = last6.map(c=>sumByTypeComp(c,'receita'));
-  const despesaSpark = last6.map(c=>sumByTypeComp(c,'despesa'));
-  const saldoSpark = last6.map((c,i)=>receitaSpark[i]-despesaSpark[i]);
-
-  const dR = pctDelta(receitaMes, receitaPrev);
-  const dD = pctDelta(despesaMes, despesaPrev);
-  const dS = pctDelta(saldoMes, saldoPrev);
-
-  document.getElementById('kpiMain').innerHTML = [
-    kpiCard({icon:'up',color:'green',title:'Receita do mês', value:fmtBRL(receitaMes), delta:dR.txt, deltaUp:dR.up, spark:receitaSpark, sparkColor:'#2be08a'}),
-    kpiCard({icon:'down',color:'red',title:'Despesa do mês', value:fmtBRL(despesaMes), delta:dD.txt, deltaUp:!dD.up, spark:despesaSpark, sparkColor:'#ff5d7a'}),
-    kpiCard({icon:'dashboard',color:'blue',title:'Saldo do mês', value:fmtBRL(saldoMes), delta:dS.txt, deltaUp:dS.up, spark:saldoSpark, sparkColor:'#5ac8fa'}),
-    kpiCard({icon:'cards',color:'amber',title:'Fatura atual total', value:fmtBRL(totalCurrent)}),
-    kpiCard({icon:'cards',color:'amber',title:'Próxima fatura total', value:fmtBRL(totalNext)}),
-    kpiCard({icon:'events',color:'green',title:'Valores a receber', value:fmtBRL(ev.toReceive)}),
-  ].join('');
-
   const reserves = reservesTotals();
   const instT = installmentsTotals();
-  const fixedT = fixedExpensesTotals();
-  const saldoNu = saldoNubank();
-  const saldoCx = saldoCaixa();
-  const disponivelReal = totalAccountBalances() + reserves.total - totalCurrent - totalNext - instT.monthlyCommitted - fixedT.monthlyTotal;
 
-  document.getElementById('kpiSecondary').innerHTML = [
-    kpiCard({icon:'dashboard',color:'purple',title:'Saldo Nubank', value:fmtBRL(saldoNu)}),
-    kpiCard({icon:'dashboard',color:'purple',title:'Saldo Caixa', value:fmtBRL(saldoCx)}),
-    kpiCard({icon:'dashboard',color: disponivelReal>=0?'green':'red',title:'Disponível real', value:fmtBRL(disponivelReal)}),
-    kpiCard({icon:'cards',color:'blue',title:'Limite livre total', value:fmtBRL(totalAvail)}),
+  document.getElementById('kpiMain').innerHTML = [
+    kpiCard({icon:'cards',color:'red',title:'Fatura fechada total', value:fmtBRL(totalCurrent)}),
+    kpiCard({icon:'cards',color:'amber',title:'Fatura atual total (aberto)', value:fmtBRL(totalNext)}),
+    kpiCard({icon:'cards',color:'blue',title:'Limite disponível total', value:fmtBRL(totalAvail)}),
     kpiCard({icon:'reserves',color:'green',title:'Reservas', value:fmtBRL(reserves.total)}),
-    kpiCard({icon:'installments',color:'amber',title:'Total parcelado futuro', value:fmtBRL(instT.remainingTotal)}),
+    kpiCard({icon:'installments',color:'purple',title:'Parcelado no futuro', value:fmtBRL(instT.remainingTotal)}),
+    kpiCard({icon:'events',color:'green',title:'A receber (eventos)', value:fmtBRL(ev.toReceive)}),
   ].join('');
 
   const best = bestCard();
@@ -1817,6 +1811,29 @@ function ringSVG(pct, color){
     <circle cx="39" cy="39" r="${r}" fill="none" stroke="${color}" stroke-width="8" stroke-linecap="round"
       stroke-dasharray="${c}" stroke-dashoffset="${offset}" style="filter:drop-shadow(0 0 6px ${color}80)"/>
   </svg>`;
+}
+
+function creditCardBarHTML(c){
+  const avail = getAvailableLimit(c);
+  const invoice = getComputedInvoice(c);
+  const nextInv = getComputedNextInvoice(c);
+  const pct = clamp(((Number(c.limit)-avail)/Number(c.limit))*100,0,100);
+  const color = pct>=90 ? 'var(--red)' : (pct>=70 ? 'var(--amber)' : (CARD_COLORS[c.name]||'var(--purple)'));
+  return `
+  <div class="cc-bar-row" data-card="${c.name}">
+    <div class="cc-bar-head">
+      <span style="display:flex; align-items:center; gap:10px;">${cardIconBadge(c.name,26)}<b>${c.name}</b></span>
+      <button class="icon-btn" data-edit-card="${c.name}">${ICONS.edit}</button>
+    </div>
+    <div class="cc-bar-track"><span style="width:${pct}%; background:${color};"></span></div>
+    <div class="cc-bar-stats">
+      <div><span class="cc-label">Fatura fechada</span><b style="color:var(--red);">${fmtBRL(invoice)}</b></div>
+      <div><span class="cc-label">Fatura atual (aberto)</span><b style="color:var(--amber);">${fmtBRL(nextInv)}</b></div>
+      <div><span class="cc-label">Limite disponível</span><b>${fmtBRL(avail)}</b></div>
+      <div><span class="cc-label">% usado</span><b>${pct.toFixed(0)}%</b></div>
+      <button class="btn btn-sm" data-pay-card="${c.name}" ${invoice<=0 ? 'disabled style="opacity:.4; cursor:not-allowed;"' : ''}>Pagar fatura</button>
+    </div>
+  </div>`;
 }
 
 function creditCardHTML(c, withActions){
@@ -1885,7 +1902,7 @@ function creditCardCompactHTML(c){
 }
 
 function renderCardsCentral(){
-  document.getElementById('ccGrid').innerHTML = DB.cards.map(c=>creditCardHTML(c,true)).join('');
+  document.getElementById('ccGrid').innerHTML = DB.cards.map(c=>creditCardBarHTML(c)).join('');
   document.getElementById('ccGridFull').innerHTML = DB.cards.map(c=>creditCardHTML(c,true)).join('');
   document.querySelectorAll('[data-edit-card]').forEach(btn=>{
     btn.addEventListener('click', ()=> openCardModal(btn.dataset.editCard));
@@ -2407,17 +2424,23 @@ function openMovModal(id){
       const kindVal = document.getElementById('f_installment_kind').value;
 
       if(kindVal === 'existente'){
-        // parcelamento que já vem sendo pago — não lança nada agora (você já deve ter
-        // ajustado a fatura manualmente); a partir do mês que vem, lança sozinho.
+        // já vem sendo pago — lança a parcela atual agora mesmo (entra na fatura
+        // atual/em aberto na hora), e as próximas entram sozinhas a partir do mês que vem.
         const parcelaAtual = clamp(parseInt(document.getElementById('f_installment_current').value)||1, 1, parcelas);
         const remaining = Math.max(0, parcelas - parcelaAtual);
+        const installmentId = uid();
+        DB.movements.push({
+          id:uid(), date, type:'despesa', category, account, paymentMethod,
+          description: `${description} (Parcela ${parcelaAtual}/${parcelas})`,
+          amount, competencia: competenciaOf(date), installmentId
+        });
         DB.installments.push({
-          id:uid(), purchase:description, category, card:account, totalValue: amount*parcelas,
+          id:installmentId, purchase:description, category, card:account, totalValue: amount*parcelas,
           installmentsCount:parcelas, installmentValue:amount, purchaseDate:date, remainingInstallments:remaining,
           autoLaunchFrom: nextCompetencia(currentCompetencia())
         });
         saveDB(DB); closeModal(); renderAll();
-        showToast(`Parcelamento cadastrado (parcela ${parcelaAtual}/${parcelas}). Restam ${remaining} parcela(s), que entram sozinhas a partir do mês que vem.`);
+        showToast(`Parcela ${parcelaAtual}/${parcelas} lançada agora. Restam ${remaining} parcela(s), que entram sozinhas a partir do mês que vem.`);
         return;
       }
 
@@ -2686,37 +2709,63 @@ function renderInstallmentsView(){
   const t = installmentsTotals();
   document.getElementById('instKpi').innerHTML = [
     kpiCard({icon:'installments',color:'purple',title:'Parcelamentos ativos', value:t.active.length}),
-    kpiCard({icon:'installments',color:'amber',title:'Valor mensal comprometido', value:fmtBRL(t.monthlyCommitted)}),
     kpiCard({icon:'installments',color:'red',title:'Valor restante total', value:fmtBRL(t.remainingTotal)}),
     kpiCard({icon:'installments',color:'blue',title:'Maior saldo restante', value: t.biggest ? t.biggest.purchase : '—'}),
   ].join('');
 
-  const box = document.getElementById('instCards');
-  if(DB.installments.length===0){ box.innerHTML = emptyStateHTML('Nenhum parcelamento cadastrado ainda. Marque "Parcelado" ao criar uma movimentação em crédito.'); return; }
-  box.innerHTML = `<div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:14px;">${DB.installments.map(i=>{
-    const done = i.installmentsCount - i.remainingInstallments;
-    const pct = clamp((done/i.installmentsCount)*100,0,100);
-    const remaining = i.installmentValue*i.remainingInstallments;
-    const color = pct>=80 ? 'var(--green)' : (pct>=40 ? 'var(--purple)' : 'var(--amber)');
-    return `
-    <div class="budget-item" style="margin-bottom:0;">
-      <div class="bi-top">
-        <span style="display:flex; align-items:center; gap:10px;">${categoryIconBadge(i.category,30)}
-          <span>
-            <b style="display:block;">${i.purchase}</b>
-            <span style="font-size:11px; color:var(--text-dim); display:flex; align-items:center; gap:5px; margin-top:2px;">${cardBadge(i.card,16)}${i.card}</span>
-          </span>
-        </span>
-        <button class="icon-btn" data-del-inst="${i.id}">${ICONS.trash}</button>
-      </div>
-      <div style="font-size:19px; font-weight:800; margin:10px 0 6px;">${fmtBRL(i.installmentValue)}<span style="font-size:12px; color:var(--text-dim); font-weight:400;">/mês</span></div>
-      <div class="budget-bar" style="height:10px;"><span style="width:${pct}%; background:${color};"></span></div>
-      <div style="display:flex; justify-content:space-between; margin-top:8px; font-size:11.5px; color:var(--text-dim);">
-        <span>${done}/${i.installmentsCount} parcelas pagas</span>
-        <span>Restam <b style="color:var(--text);">${fmtBRL(remaining)}</b></span>
+  // valor mensal comprometido, separado por cartão + total geral
+  const byCard = {};
+  t.active.forEach(i=>{ byCard[i.card] = (byCard[i.card]||0) + Number(i.installmentValue); });
+  const cardEntries = Object.entries(byCard);
+  const perCardHTML = cardEntries.length===0 ? '' : `
+    <div class="chart-card" style="margin-bottom:16px;">
+      <h4>Valor mensal comprometido por cartão</h4>
+      <div style="display:flex; flex-wrap:wrap; gap:20px; margin-top:8px;">
+        ${cardEntries.map(([card,val])=>`
+          <div style="display:flex; align-items:center; gap:8px;">
+            ${cardBadge(card,24)}
+            <div>
+              <div style="font-size:11px; color:var(--text-secondary);">${card}</div>
+              <b style="font-size:15px;">${fmtBRL(val)}</b>
+            </div>
+          </div>`).join('')}
+        <div style="display:flex; align-items:center; gap:8px; padding-left:16px; border-left:1px solid var(--border);">
+          <div>
+            <div style="font-size:11px; color:var(--text-secondary);">TOTAL GERAL</div>
+            <b style="font-size:17px; color:var(--purple);">${fmtBRL(t.monthlyCommitted)}</b>
+          </div>
+        </div>
       </div>
     </div>`;
-  }).join('')}</div>`;
+
+  const box = document.getElementById('instCards');
+  if(DB.installments.length===0){ box.innerHTML = emptyStateHTML('Nenhum parcelamento cadastrado ainda. Marque "Parcelado" ao criar uma movimentação em crédito.'); return; }
+
+  box.innerHTML = `${perCardHTML}
+    <div class="table-card">
+      <table>
+        <thead><tr><th>Compra</th><th>Cartão</th><th>Parcela</th><th>Valor mensal</th><th>Já pago</th><th>Resta pagar</th><th>Total</th><th></th></tr></thead>
+        <tbody>
+          ${DB.installments.map(i=>{
+            const done = i.installmentsCount - i.remainingInstallments;
+            const paidValue = done*i.installmentValue;
+            const remaining = i.installmentValue*i.remainingInstallments;
+            const total = i.installmentValue*i.installmentsCount;
+            return `
+            <tr>
+              <td style="display:flex; align-items:center; gap:8px; font-weight:600;">${categoryIconBadge(i.category,22)}${i.purchase}</td>
+              <td><span style="display:flex; align-items:center; gap:6px;">${cardBadge(i.card,20)}${i.card}</span></td>
+              <td>${done}/${i.installmentsCount}</td>
+              <td style="font-weight:700;">${fmtBRL(i.installmentValue)}</td>
+              <td style="color:var(--green);">${fmtBRL(paidValue)}</td>
+              <td style="color:var(--amber); font-weight:700;">${fmtBRL(remaining)}</td>
+              <td style="color:var(--text-dim);">${fmtBRL(total)}</td>
+              <td><button class="icon-btn" data-del-inst="${i.id}">${ICONS.trash}</button></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`;
 
   box.querySelectorAll('[data-del-inst]').forEach(b=>b.addEventListener('click', ()=>{
     const instId = b.dataset.delInst;
