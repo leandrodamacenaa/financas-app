@@ -243,7 +243,7 @@ button{cursor:pointer; border:none; background:none; color:inherit;}
 .cc-summary div{font-size:11px; color:var(--text-dim);}
 .cc-summary div b{display:block; font-size:14px; color:var(--text); margin-top:2px; font-weight:700;}
 
-.cc-grid{display:grid; grid-template-columns:repeat(4, 1fr); gap:16px;}
+.cc-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:16px;}
 .cc-bar-list{display:flex; flex-direction:column; gap:12px;}
 .cc-bar-row{background:var(--card2); border:1px solid var(--border); border-radius:14px; padding:16px;}
 .cc-bar-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;}
@@ -254,7 +254,6 @@ button{cursor:pointer; border:none; background:none; color:inherit;}
 .cc-bar-stats b{font-size:14.5px;}
 .cc-bar-stats .btn{margin-left:auto;}
 @media(max-width:640px){.cc-bar-stats{gap:14px;} .cc-bar-stats .btn{margin-left:0; width:100%;}}
-@media(max-width:1300px){.cc-grid{grid-template-columns:repeat(2,1fr);}}
 @media(max-width:640px){.cc-grid{grid-template-columns:1fr;}}
 
 .credit-card{
@@ -773,6 +772,15 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
               <div class="chart-insight" id="insightComparison"></div>
             </div>
           </div>
+
+          <div class="chart-card" style="margin-top:16px;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+              <div><h4>Gastos por dia</h4><div class="sub" style="font-size:11.5px; color:var(--text-secondary); margin-top:2px;">Últimos 30 dias</div></div>
+            </div>
+            <div class="chart-holder" style="height:340px; margin-top:10px;"><canvas id="chartDaily"></canvas></div>
+            <div class="chart-insight" id="insightDaily"></div>
+          </div>
+
           <div class="charts-grid" style="margin-top:16px;">
             <div class="chart-card"><h4>Próximos vencimentos</h4><div id="upcomingList"></div></div>
             <div class="chart-card"><h4>Últimas movimentações</h4><div id="recentMovList"></div></div>
@@ -991,13 +999,12 @@ const STORAGE_KEY = 'findash_v3';
 
 const CATEGORIES = ['Alimentação','Transporte','Saúde','Faculdade','Tecnologia','Lazer','Assinaturas','Moradia','Vestuário','Financeiro','Poupança','Outros'];
 const PAYMENT_METHODS = ['Pix','Débito','Crédito','Transferência','Dinheiro'];
-const ACCOUNTS = ['Nubank','PicPay','Neon','Mercado Pago'];
-const CARD_NAMES = ['Nubank','PicPay','Neon','Mercado Pago'];
-const CARD_COLORS = {'Nubank':'#9b6bff','PicPay':'#2be08a','Neon':'#5ac8fa','Mercado Pago':'#ffb84d'};
+const ACCOUNTS = ['Nubank','PicPay','Mercado Pago'];
+const CARD_NAMES = ['Nubank','PicPay','Mercado Pago'];
+const CARD_COLORS = {'Nubank':'#9b6bff','PicPay':'#2be08a','Mercado Pago':'#ffb84d'};
 const CARD_ICONS = {
   'Nubank':'<svg viewBox="0 0 24 24" fill="none"><path d="M6 4c6 0 5 6 9 6s3-6 3-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M6 20c6 0 5-6 9-6s3 6 3 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
   'PicPay':'<svg viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="18" height="13" rx="3" stroke="currentColor" stroke-width="2.2"/><path d="M3 10h18" stroke="currentColor" stroke-width="2.2"/><circle cx="17" cy="14.2" r="1.4" fill="currentColor"/></svg>',
-  'Neon':'<svg viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" fill="currentColor" fill-opacity="0.15"/></svg>',
   'Mercado Pago':'<svg viewBox="0 0 24 24" fill="none"><path d="M12 3a6 6 0 0 1 6 6c0 3.5-3 5.5-6 9-3-3.5-6-5.5-6-9a6 6 0 0 1 6-6Z" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><circle cx="12" cy="9" r="2" fill="currentColor"/></svg>',
 };
 function cardIconBadge(name, size=26){
@@ -1040,7 +1047,7 @@ function emptyStateHTML(message){
 }
 const EVENT_TYPES = ['Casamento','15 Anos','Aniversário','Arraia','Meio Medico','Aula Da Saudade','Formatura','Corporativo','Confraternização'];
 const FUNCTIONS = ['Bartender','Coordenador','Barback','Garçom'];
-const RESERVE_INST = ['Nubank','Neon'];
+const RESERVE_INST = ['Nubank'];
 
 const MONTH_NAMES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 const MONTH_NAMES_FULL = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -1122,7 +1129,6 @@ function seedData(){
   const cards = [
     {name:'Nubank', limit:3567.10, availableLimit:12.49, closingDay:6, dueDay:15, currentInvoice:727.81, nextInvoice:0, invoiceBaselineDate:todayISO()},
     {name:'PicPay', limit:3510, availableLimit:120.00, closingDay:7, dueDay:15, currentInvoice:997.62, nextInvoice:0, invoiceBaselineDate:todayISO()},
-    {name:'Neon', limit:91.82, availableLimit:91.82, closingDay:8, dueDay:13, currentInvoice:0, nextInvoice:0, invoiceBaselineDate:todayISO()},
     {name:'Mercado Pago', limit:2766.46, availableLimit:1688.65, closingDay:12, dueDay:17, currentInvoice:1077.81, nextInvoice:0, invoiceBaselineDate:todayISO()},
   ];
 
@@ -1132,17 +1138,14 @@ function seedData(){
 
   const reserves = [
     {id:uid(), date:'2026-06-01', institution:'Nubank', type:'Caixinha', entrada:200, saida:0, saldo:200},
-    {id:uid(), date:'2026-06-15', institution:'Neon', type:'Caixinha', entrada:100, saida:0, saldo:100},
-    {id:uid(), date:'2026-07-01', institution:'Neon', type:'Reserva Automática', entrada:10, saida:0, saldo:110},
   ];
 
   // Saldo atual de cada conta — ponto de partida a partir de hoje; lançamentos futuros somam/subtraem sozinhos
-  const accountBalances = {'Nubank':2926.98, 'PicPay':0.58, 'Neon':100, 'Mercado Pago':89.73};
+  const accountBalances = {'Nubank':2926.98, 'PicPay':0.58, 'Mercado Pago':89.73};
   const todayStr = todayISO();
-  const accountBalancesAsOf = {'Nubank':todayStr, 'PicPay':todayStr, 'Neon':todayStr, 'Mercado Pago':todayStr};
+  const accountBalancesAsOf = {'Nubank':todayStr, 'PicPay':todayStr, 'Mercado Pago':todayStr};
 
   const fixedExpenses = [
-    {id:uid(), name:'Spotify', category:'Assinaturas', amount:21.90, billingDay:10, account:'Neon', paymentMethod:'Crédito', active:true},
     {id:uid(), name:'Claude Code', category:'Tecnologia', amount:100, billingDay:5, account:'Nubank', paymentMethod:'Crédito', active:true},
     {id:uid(), name:'Plano de celular', category:'Assinaturas', amount:49.90, billingDay:15, account:'Nubank', paymentMethod:'Crédito', active:true},
   ];
@@ -1492,7 +1495,7 @@ function migrateBaselines(){
   DB.accountBalances = DB.accountBalances || {};
   DB.accountBalancesAsOf = DB.accountBalancesAsOf || {};
   DB.baselineExcludedIds = DB.baselineExcludedIds || [];
-  ['Nubank','PicPay','Neon','Mercado Pago'].forEach(name=>{
+  ['Nubank','PicPay','Mercado Pago'].forEach(name=>{
     if(!DB.accountBalancesAsOf[name]){ DB.accountBalancesAsOf[name] = todayISO(); changed = true; }
     if(DB.accountBalances[name] === undefined){ DB.accountBalances[name] = 0; changed = true; }
   });
@@ -1515,6 +1518,16 @@ function migrateBaselines(){
       changed = true;
     }
   });
+  if(!DB.neonRemoved){
+    // remove o cartão Neon de tudo (a pedido do usuário) — mantém o histórico de
+    // movimentações antigas intacto, só para de aparecer como opção pra coisas novas.
+    DB.cards = DB.cards.filter(c=>c.name!=='Neon');
+    if(DB.accountBalances) delete DB.accountBalances['Neon'];
+    if(DB.accountBalancesAsOf) delete DB.accountBalancesAsOf['Neon'];
+    DB.fixedExpenses = (DB.fixedExpenses||[]).filter(f=>f.account!=='Neon');
+    DB.neonRemoved = true;
+    changed = true;
+  }
   if(!DB.reservesLinkedToMovements){
     // retroativo: cria a movimentação de saldo pra cada reserva já lançada antes dessa versão existir.
     (DB.reserves||[]).forEach(r=>{
@@ -1572,7 +1585,7 @@ function freezeAllBaselines(){
     c2.invoiceBaselineDate = `${lastClosedCycle}-01`;
   });
   DB.accountBalances = DB.accountBalances || {};
-  ['Nubank','PicPay','Neon','Mercado Pago'].forEach(name=>{
+  ['Nubank','PicPay','Mercado Pago'].forEach(name=>{
     DB.accountBalances[name] = getAccountBalance(name);
   });
 }
@@ -1589,7 +1602,7 @@ function getAccountBalance(name){
   return Math.round((baseline + delta)*100)/100;
 }
 function totalAccountBalances(){
-  const names = ['Nubank','PicPay','Neon','Mercado Pago'];
+  const names = ['Nubank','PicPay','Mercado Pago'];
   return names.reduce((s,n)=>s+getAccountBalance(n), 0);
 }
 function getInvoiceCycle(dateStr, closingDay){
@@ -2488,21 +2501,20 @@ function renderChartComparison(){
 function renderChartReserves(canvasId, chartKey){
   destroyChart(chartKey);
   const comps = last12Competencias();
-  const byInst = {Nubank:0, Neon:0};
-  const seriesNu = [], seriesNe = [];
+  const byInst = {}; RESERVE_INST.forEach(i=>byInst[i]=0);
+  const series = {}; RESERVE_INST.forEach(i=>series[i]=[]);
   comps.forEach(c=>{
-    DB.reserves.filter(r=>r.date.slice(0,7)===c).forEach(r=>{ byInst[r.institution]+= Number(r.entrada)-Number(r.saida); });
-    seriesNu.push(byInst.Nubank);
-    seriesNe.push(byInst.Neon);
+    DB.reserves.filter(r=>r.date.slice(0,7)===c).forEach(r=>{ if(byInst[r.institution]!==undefined) byInst[r.institution]+= Number(r.entrada)-Number(r.saida); });
+    RESERVE_INST.forEach(i=>series[i].push(byInst[i]));
   });
   const labels = comps.map(c=>MONTH_NAMES[Number(c.slice(5,7))-1]+'/'+c.slice(2,4));
+  const colors = ['#9b6bff','#5ac8fa','#2be08a','#ffb84d'];
   const ctx = document.getElementById(canvasId);
   charts[chartKey] = new Chart(ctx, {
     type:'line',
-    data:{labels, datasets:[
-      {label:'Nubank', data:seriesNu, borderColor:'#9b6bff', backgroundColor:'rgba(155,107,255,0.15)', fill:true, tension:.4, pointRadius:0, borderWidth:2.5},
-      {label:'Neon', data:seriesNe, borderColor:'#5ac8fa', backgroundColor:'rgba(90,200,250,0.12)', fill:true, tension:.4, pointRadius:0, borderWidth:2.5},
-    ]},
+    data:{labels, datasets:RESERVE_INST.map((inst,i)=>({
+      label:inst, data:series[inst], borderColor:colors[i%colors.length], backgroundColor:colors[i%colors.length]+'26', fill:true, tension:.4, pointRadius:0, borderWidth:2.5
+    }))},
     options:{
       responsive:true, maintainAspectRatio:false,
       plugins:{legend:{position:'top', align:'end', labels:{boxWidth:10, boxHeight:10, usePointStyle:true}},
@@ -2514,8 +2526,8 @@ function renderChartReserves(canvasId, chartKey){
   if(canvasId==='chartReserves'){
     const insightEl = document.getElementById('insightReserves');
     if(insightEl){
-      const totalNow = seriesNu[seriesNu.length-1] + seriesNe[seriesNe.length-1];
-      const totalPrev = seriesNu[seriesNu.length-2] + seriesNe[seriesNe.length-2];
+      const totalNow = RESERVE_INST.reduce((s,i)=>s+series[i][series[i].length-1],0);
+      const totalPrev = RESERVE_INST.reduce((s,i)=>s+series[i][series[i].length-2],0);
       if(totalPrev===0 && totalNow===0){
         insightEl.textContent = 'Ainda não há reservas registradas.';
       } else if(totalPrev===0){
@@ -2564,6 +2576,55 @@ function showCategoryDrilldown(category){
   el.querySelectorAll('[data-edit-drilldown]').forEach(b=>b.addEventListener('click', ()=>openMovModal(b.dataset.editDrilldown)));
 }
 
+function renderChartDaily(){
+  destroyChart('daily');
+  const today = new Date();
+  const days = [];
+  for(let i=29; i>=0; i--){
+    const d = new Date(today.getFullYear(), today.getMonth(), today.getDate()-i);
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const total = DB.movements
+      .filter(m=>m.date===dateStr && m.type==='despesa' && !m.isInvoicePayment)
+      .reduce((s,m)=>s+Number(m.amount),0);
+    days.push({date:dateStr, day:d.getDate(), total});
+  }
+  const labels = days.map(d=>d.day);
+  const maxVal = Math.max(1, ...days.map(d=>d.total));
+  const colors = days.map(d=> d.total>=maxVal*0.7 ? '#ff5d7a' : (d.total>0 ? '#9b6bff' : 'rgba(255,255,255,0.08)'));
+
+  charts.daily = new Chart(document.getElementById('chartDaily'), {
+    type:'bar',
+    data:{labels, datasets:[{data:days.map(d=>d.total), backgroundColor:colors, borderRadius:5}]},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{
+          title:(items)=> fmtDate(days[items[0].dataIndex].date),
+          label:(c)=> fmtBRL(c.raw)
+        }}
+      },
+      scales:{
+        x:{grid:{display:false}, ticks:{maxRotation:0, autoSkip:true, autoSkipPadding:8}},
+        y:{grid:{color:'rgba(255,255,255,0.05)'}, ticks:{callback:(v)=>'R$ '+v}}
+      }
+    }
+  });
+
+  const insightEl = document.getElementById('insightDaily');
+  if(insightEl){
+    const withSpending = days.filter(d=>d.total>0);
+    if(withSpending.length===0){
+      insightEl.textContent = 'Nenhum gasto lançado nos últimos 30 dias.';
+    } else {
+      const heaviest = days.reduce((max,d)=> d.total>max.total ? d : max, days[0]);
+      const avg = days.reduce((s,d)=>s+d.total,0) / 30;
+      const todayTotal = days[days.length-1].total;
+      insightEl.innerHTML = `Seu dia de maior gasto nos últimos 30 dias foi <b>${fmtDate(heaviest.date)}</b>, com <b>${fmtBRL(heaviest.total)}</b>. Média diária: <b>${fmtBRL(avg)}</b>${todayTotal>0 ? ` · Hoje: <b>${fmtBRL(todayTotal)}</b>` : ''}.`;
+    }
+  }
+}
+
 function renderAllCharts(){
   if(typeof Chart === 'undefined'){
     console.warn('Chart.js não carregou (sem internet ou CDN bloqueado). Os gráficos ficarão indisponíveis, mas o resto do painel funciona normalmente.');
@@ -2574,6 +2635,7 @@ function renderAllCharts(){
   safeRun(renderChartCat, 'gráfico de categorias');
   safeRun(renderChartInvoices, 'gráfico de faturas');
   safeRun(renderChartComparison, 'gráfico de comparação com média');
+  safeRun(renderChartDaily, 'gráfico de gastos por dia');
   safeRun(()=>renderChartReserves('chartReserves','res1'), 'gráfico de reservas');
   safeRun(()=>renderChartReserves('chartReserves2','res2'), 'gráfico de reservas (aba Reservas)');
 }
@@ -3846,7 +3908,6 @@ function renderReservesView(){
   document.getElementById('reserveKpi').innerHTML = [
     kpiCard({icon:'reserves',color:'purple',title:'Total em reservas', value:fmtBRL(r.total)}),
     kpiCard({icon:'reserves',color:'purple',title:'Reserva Nubank', value:fmtBRL(r.byInst['Nubank']||0)}),
-    kpiCard({icon:'reserves',color:'blue',title:'Reserva Neon', value:fmtBRL(r.byInst['Neon']||0)}),
     kpiCard({icon:'reserves',color:'green',title:'Nº de movimentações', value:DB.reserves.length}),
   ].join('');
 
