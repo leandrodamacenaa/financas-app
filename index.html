@@ -989,7 +989,7 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
 
 const STORAGE_KEY = 'findash_v3';
 
-const CATEGORIES = ['Alimentação','Transporte','Saúde','Faculdade','Tecnologia','Lazer','Assinaturas','Moradia','Vestuário','Financeiro','Outros'];
+const CATEGORIES = ['Alimentação','Transporte','Saúde','Faculdade','Tecnologia','Lazer','Assinaturas','Moradia','Vestuário','Financeiro','Poupança','Outros'];
 const PAYMENT_METHODS = ['Pix','Débito','Crédito','Transferência','Dinheiro'];
 const ACCOUNTS = ['Nubank','PicPay','Neon','Mercado Pago'];
 const CARD_NAMES = ['Nubank','PicPay','Neon','Mercado Pago'];
@@ -1016,6 +1016,7 @@ const CATEGORY_ICONS = {
   'Moradia':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>',
   'Vestuário':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3l4 2 4-2 4 4-3 3v11H7V10L4 7Z"/></svg>',
   'Financeiro':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 9.5c0-1.5 1.3-2.3 3-2.3s3 .9 3 2.2-1 1.8-3 2.1-3 .9-3 2.2 1.3 2.3 3 2.3 3-.8 3-2.3"/></svg>',
+  'Poupança':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12c0-3 3-6 8-6 3 0 5 1 6 2h1a1 1 0 0 1 1 1v3l-2 1v2l-2 1v1H9v-2c-3-1-5-3-5-3Z"/><circle cx="16" cy="8.5" r=".8" fill="currentColor" stroke="none"/></svg>',
   'Outros':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>',
 };
 function categoryIconBadge(cat, size=22){
@@ -1514,6 +1515,27 @@ function migrateBaselines(){
       changed = true;
     }
   });
+  if(!DB.reservesLinkedToMovements){
+    // retroativo: cria a movimentação de saldo pra cada reserva já lançada antes dessa versão existir.
+    (DB.reserves||[]).forEach(r=>{
+      const alreadyLinked = DB.movements.some(m=>m.reserveTransferId===r.id);
+      if(alreadyLinked) return;
+      if(Number(r.entrada)>0){
+        DB.movements.push({
+          id:uid(), date:r.date, type:'despesa', category:'Poupança', account:r.institution, paymentMethod:'Transferência',
+          description:`${r.type||'Aporte'} — reserva ${r.institution}`, amount:Number(r.entrada), competencia:competenciaOf(r.date), reserveTransferId:r.id
+        });
+      }
+      if(Number(r.saida)>0){
+        DB.movements.push({
+          id:uid(), date:r.date, type:'receita', category:'Poupança', account:r.institution, paymentMethod:'Transferência',
+          description:`${r.type||'Resgate'} — reserva ${r.institution}`, amount:Number(r.saida), competencia:competenciaOf(r.date), reserveTransferId:r.id
+        });
+      }
+    });
+    DB.reservesLinkedToMovements = true;
+    changed = true;
+  }
   (DB.events||[]).forEach(e=>{
     if(!e.status){
       e.status = e.paid ? 'pago' : 'pendente';
@@ -1762,13 +1784,17 @@ function renderDashSidePanel(){
 
   migrateSavingsGoals();
   const goals = DB.savingsGoals || [];
+  const reservesForGoals = reservesTotals();
 
   panel.innerHTML = `
     <div class="side-panel-card">
       <h4>Metas em andamento</h4>
       ${goals.length===0 ? `<div style="font-size:12px; color:var(--text-dim);">Nenhuma meta criada ainda — dá uma olhada na aba Metas.</div>` :
         goals.slice(0,3).map(g=>{
-          const current = Number(g.current)||0;
+          const isLinked = g.linkedReserve && g.linkedReserve !== '';
+          const current = isLinked
+            ? (g.linkedReserve==='total' ? reservesForGoals.total : (reservesForGoals.byInst[g.linkedReserve]||0))
+            : (Number(g.current)||0);
           const pct = clamp((current/g.target)*100, 0, 100);
           return `
           <div style="margin-bottom:10px;">
@@ -2697,8 +2723,15 @@ function openMovModal(id){
           <option value="nao">Não, foi só dessa vez</option>
           <option value="sim">Sim, todo mês (assinatura, mensalidade...)</option>
         </select>
+      </div>
+      <div class="field" id="wrap_reserve_inst" style="display:none;">
+        <label>Guardar em qual reserva/caixinha?</label>
+        <select id="f_reserve_inst">${RESERVE_INST.map(i=>`<option>${i}</option>`).join('')}</select>
       </div>` : ''}
     </div>
+    <p id="reserve_note" style="display:none; font-size:11.5px; color:var(--text-dim); margin-top:8px;">
+      Isso já atualiza sozinho a reserva daquela conta na aba Reservas, junto com o desconto do saldo.
+    </p>
     <p id="recurring_note" style="display:none; font-size:11.5px; color:var(--text-dim); margin-top:8px;">
       Isso vai criar um "gasto fixo" com cobrança sempre no dia ${new Date().getDate()} — o app lança sozinho todo mês a partir do mês que vem (acompanhe na aba Gastos Fixos).
     </p>
@@ -2722,6 +2755,9 @@ function openMovModal(id){
     const wrapKind = document.getElementById('wrap_installment_kind');
     const kindEl = document.getElementById('f_installment_kind');
     const wrapCurrent = document.getElementById('wrap_installment_current');
+    const categoryEl = document.getElementById('f_category');
+    const wrapReserveInst = document.getElementById('wrap_reserve_inst');
+    const reserveNote = document.getElementById('reserve_note');
 
     function syncInstallmentUI(){
       const isCreditExpense = payEl.value === 'Crédito' && typeEl.value === 'despesa';
@@ -2738,7 +2774,12 @@ function openMovModal(id){
       wrapRecurring.style.display = (isDespesa && !parcelado) ? '' : 'none';
       if(parcelado || !isDespesa){ recurringModeEl.value = 'nao'; }
       recurringNote.style.display = (wrapRecurring.style.display!=='none' && recurringModeEl.value==='sim') ? '' : 'none';
+
+      const isPoupanca = isDespesa && categoryEl.value === 'Poupança';
+      wrapReserveInst.style.display = isPoupanca ? '' : 'none';
+      reserveNote.style.display = isPoupanca ? '' : 'none';
     }
+    categoryEl.addEventListener('change', syncInstallmentUI);
     payEl.addEventListener('change', syncInstallmentUI);
     typeEl.addEventListener('change', syncInstallmentUI);
     modeEl.addEventListener('change', syncInstallmentUI);
@@ -2836,6 +2877,19 @@ function openMovModal(id){
       });
       saveDB(DB); closeModal(); renderAll();
       showToast(`Lançado! "${description}" virou um gasto fixo — vai lançar sozinho todo mês a partir do mês que vem.`);
+      return;
+    }
+
+    if(!editing && category === 'Poupança' && type === 'despesa'){
+      const reserveInstEl = document.getElementById('f_reserve_inst');
+      const institution = reserveInstEl ? reserveInstEl.value : RESERVE_INST[0];
+      const reserveId = uid();
+      const movId = uid();
+      DB.movements.push({id:movId, ...payload, account:institution, reserveTransferId:reserveId});
+      const prevBalance = DB.reserves.filter(x=>x.institution===institution).reduce((s,x)=>s+Number(x.entrada)-Number(x.saida),0);
+      DB.reserves.push({id:reserveId, date, institution, type:description||'Aporte', entrada:amount, saida:0, saldo:prevBalance+amount});
+      saveDB(DB); closeModal(); renderAll();
+      showToast(`Guardado na reserva ${institution} — já atualizou sozinho lá na aba Reservas.`);
       return;
     }
 
@@ -3653,8 +3707,12 @@ function renderSavingsGoalView(){
     container.innerHTML = emptyStateHTML('Nenhuma meta definida ainda. Clique em "+ Nova meta" pra criar uma.');
     return;
   }
+  const reserves = reservesTotals();
   container.innerHTML = `<div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px;">${goals.map(goal=>{
-    const current = Number(goal.current)||0;
+    const isLinked = goal.linkedReserve && goal.linkedReserve !== '';
+    const current = isLinked
+      ? (goal.linkedReserve==='total' ? reserves.total : (reserves.byInst[goal.linkedReserve]||0))
+      : (Number(goal.current)||0);
     const pct = clamp((current/goal.target)*100, 0, 100);
     const monthly = Number(goal.monthlyTarget)||0;
     let monthsInfo = '';
@@ -3663,6 +3721,7 @@ function renderSavingsGoalView(){
       const monthsLeft = falta<=0 ? 0 : Math.ceil(falta/monthly);
       monthsInfo = `<div style="font-size:11.5px; color:var(--text-dim); margin-top:6px;">Guardando ${fmtBRL(monthly)}/mês → bate a meta em ${monthsLeft===0?'já bateu! 🎉':(monthsLeft+' mes'+(monthsLeft>1?'es':''))}</div>`;
     }
+    const linkLabel = goal.linkedReserve==='total' ? 'Total de reservas' : goal.linkedReserve;
     return `
     <div class="budget-item" style="padding:18px; margin-bottom:0;">
       <div class="bi-top"><b style="font-size:14px;">${goal.name || 'Meta de economia'}</b>
@@ -3674,6 +3733,7 @@ function renderSavingsGoalView(){
       <div style="font-size:19px; font-weight:800; color:var(--green); margin-bottom:8px;">${fmtBRL(current)} <span style="font-size:12px; color:var(--text-dim); font-weight:400;">de ${fmtBRL(goal.target)}</span></div>
       <div class="budget-bar" style="height:10px;"><span style="width:${pct}%; background:linear-gradient(90deg, var(--purple), var(--green));"></span></div>
       <div style="font-size:11.5px; color:var(--text-dim); margin-top:6px;">${pct.toFixed(0)}% alcançado</div>
+      ${isLinked ? `<div style="font-size:11px; color:var(--text-secondary); margin-top:4px;">🔗 Vinculada à reserva: ${linkLabel} — atualiza sozinha</div>` : ''}
       ${monthsInfo}
     </div>`;
   }).join('')}</div>`;
@@ -3690,27 +3750,47 @@ function renderSavingsGoalView(){
 function openSavingsGoalModal(id){
   migrateSavingsGoals();
   const editing = id ? DB.savingsGoals.find(g=>g.id===id) : null;
-  const goal = editing || {name:'', target:'', current:0, monthlyTarget:''};
+  const goal = editing || {name:'', target:'', current:0, monthlyTarget:'', linkedReserve:''};
+  const isLinked = goal.linkedReserve && goal.linkedReserve !== '';
   openModal(`
     <div class="modal-head"><h3>${editing?'Editar':'Nova'} meta de economia</h3><button id="modalClose">&times;</button></div>
     <div class="form-grid">
       <div class="field full"><label>Nome da meta</label><input type="text" id="f_gname" value="${goal.name||''}" placeholder="Ex: Reserva de emergência, Viagem..."></div>
       <div class="field"><label>Valor alvo (R$)</label><input type="number" step="0.01" id="f_gtarget" value="${goal.target||''}"></div>
-      <div class="field"><label>Valor já guardado (R$)</label><input type="number" step="0.01" id="f_gcurrent" value="${goal.current||0}"></div>
+      <div class="field"><label>Vincular a uma reserva?</label>
+        <select id="f_glink">
+          <option value="" ${!isLinked?'selected':''}>Não, controle manual</option>
+          <option value="total" ${goal.linkedReserve==='total'?'selected':''}>Total de reservas</option>
+          ${RESERVE_INST.map(inst=>`<option value="${inst}" ${goal.linkedReserve===inst?'selected':''}>${inst} (reserva)</option>`).join('')}
+        </select>
+      </div>
+      <div class="field full" id="wrap_gcurrent" style="${isLinked?'display:none;':''}">
+        <label>Valor já guardado (R$)</label><input type="number" step="0.01" id="f_gcurrent" value="${goal.current||0}">
+      </div>
       <div class="field full"><label>Quanto pretende guardar por mês? (R$)</label><input type="number" step="0.01" id="f_gmonthly" value="${goal.monthlyTarget||''}" placeholder="Ex: 50"></div>
     </div>
-    <p style="font-size:11.5px; color:var(--text-dim); margin-top:4px;">Com esse valor mensal, o app calcula sozinho em quantos meses você bate a meta — sem precisar saber a data exata.</p>
+    <p style="font-size:11.5px; color:var(--text-dim); margin-top:4px;" id="goalLinkNote">
+      ${isLinked ? 'Vinculada a uma reserva: o valor guardado atualiza sozinho conforme você mexe naquela caixinha, sem precisar editar aqui.' : 'Com o valor mensal, o app calcula sozinho em quantos meses você bate a meta — sem precisar saber a data exata.'}
+    </p>
     <div class="modal-actions">
       <button class="btn" id="modalCancel">Cancelar</button>
       <button class="btn btn-primary" id="modalSave">Salvar</button>
     </div>
   `);
+  document.getElementById('f_glink').addEventListener('change', (ev)=>{
+    const linked = ev.target.value !== '';
+    document.getElementById('wrap_gcurrent').style.display = linked ? 'none' : '';
+    document.getElementById('goalLinkNote').textContent = linked
+      ? 'Vinculada a uma reserva: o valor guardado atualiza sozinho conforme você mexe naquela caixinha, sem precisar editar aqui.'
+      : 'Com o valor mensal, o app calcula sozinho em quantos meses você bate a meta — sem precisar saber a data exata.';
+  });
   document.getElementById('modalSave').addEventListener('click', ()=>{
     const target = parseFloat(document.getElementById('f_gtarget').value);
-    const current = parseFloat(document.getElementById('f_gcurrent').value)||0;
+    const linkedReserve = document.getElementById('f_glink').value;
+    const current = linkedReserve ? 0 : (parseFloat(document.getElementById('f_gcurrent').value)||0);
     const monthlyTarget = parseFloat(document.getElementById('f_gmonthly').value)||0;
     if(isNaN(target) || target<=0){ showToast('Preencha um valor alvo válido.'); return; }
-    const payload = {name:document.getElementById('f_gname').value, target, current, monthlyTarget};
+    const payload = {name:document.getElementById('f_gname').value, target, current, monthlyTarget, linkedReserve};
     if(editing){ Object.assign(editing, payload); }
     else{ DB.savingsGoals.push({id:uid(), ...payload}); }
     saveDB(DB); closeModal(); renderAll(); showToast('Meta salva.');
@@ -3789,8 +3869,9 @@ function renderReservesView(){
 
   tbody.querySelectorAll('[data-edit-res]').forEach(b=>b.addEventListener('click', ()=>openReserveModal(b.dataset.editRes)));
   tbody.querySelectorAll('[data-del-res]').forEach(b=>b.addEventListener('click', ()=>{
-    if(confirm('Excluir esta movimentação de reserva?')){
+    if(confirm('Excluir esta movimentação de reserva? Isso também remove a movimentação de saldo vinculada a ela.')){
       DB.reserves = DB.reserves.filter(r=>r.id!==b.dataset.delRes);
+      DB.movements = DB.movements.filter(m=>m.reserveTransferId!==b.dataset.delRes);
       saveDB(DB); renderAll(); showToast('Reserva excluída.');
     }
   }));
@@ -3808,6 +3889,9 @@ function openReserveModal(id){
       <div class="field"><label>Entrada (R$)</label><input type="number" step="0.01" id="f_entrada" value="${r.entrada}"></div>
       <div class="field"><label>Saída (R$)</label><input type="number" step="0.01" id="f_saida" value="${r.saida}"></div>
     </div>
+    <p style="font-size:11.5px; color:var(--text-secondary); margin-top:4px;">
+      Uma entrada aqui já desconta sozinha do saldo daquela conta (categoria "Poupança"); uma saída (resgate) devolve pro saldo.
+    </p>
     <div class="modal-actions">
       <button class="btn" id="modalCancel">Cancelar</button>
       <button class="btn btn-primary" id="modalSave">Salvar</button>
@@ -3817,10 +3901,30 @@ function openReserveModal(id){
     const institution = document.getElementById('f_inst').value;
     const entrada = parseFloat(document.getElementById('f_entrada').value)||0;
     const saida = parseFloat(document.getElementById('f_saida').value)||0;
+    const date = document.getElementById('f_date').value;
+    const type = document.getElementById('f_type').value;
     const prevBalance = DB.reserves.filter(x=>x.institution===institution && x.id!==(editing?editing.id:null)).reduce((s,x)=>s+Number(x.entrada)-Number(x.saida),0);
-    const payload = {date:document.getElementById('f_date').value, institution, type:document.getElementById('f_type').value, entrada, saida, saldo: prevBalance+entrada-saida};
+    const reserveId = editing ? editing.id : uid();
+    const payload = {date, institution, type, entrada, saida, saldo: prevBalance+entrada-saida};
     if(editing){ Object.assign(editing, payload); }
-    else{ DB.reserves.push({id:uid(), ...payload}); }
+    else{ DB.reserves.push({id:reserveId, ...payload}); }
+
+    // remove qualquer movimentação vinculada antiga (se estiver editando) e cria a atual de novo,
+    // pra sempre bater com os valores mais recentes dessa reserva.
+    DB.movements = DB.movements.filter(m=>m.reserveTransferId!==reserveId);
+    if(entrada>0){
+      DB.movements.push({
+        id:uid(), date, type:'despesa', category:'Poupança', account:institution, paymentMethod:'Transferência',
+        description:`${type||'Aporte'} — reserva ${institution}`, amount:entrada, competencia:competenciaOf(date), reserveTransferId:reserveId
+      });
+    }
+    if(saida>0){
+      DB.movements.push({
+        id:uid(), date, type:'receita', category:'Poupança', account:institution, paymentMethod:'Transferência',
+        description:`${type||'Resgate'} — reserva ${institution}`, amount:saida, competencia:competenciaOf(date), reserveTransferId:reserveId
+      });
+    }
+
     saveDB(DB); closeModal(); renderAll(); showToast('Reserva salva.');
   });
 }
