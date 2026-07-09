@@ -291,6 +291,8 @@ button{cursor:pointer; border:none; background:none; color:inherit;}
   display:flex; flex-direction:column; gap:10px;
 }
 .chart-card h4{font-size:13.5px; font-weight:700;}
+.chart-insight{font-size:12.5px; color:var(--text-secondary); line-height:1.5; margin-top:8px; padding-top:8px; border-top:1px solid var(--border);}
+.chart-insight b{color:var(--text);}
 .chart-card .chart-holder{position:relative; height:290px;}
 .chart-card .chart-holder.small{height:270px;}
 
@@ -310,6 +312,7 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
 .pill.green{background:rgba(43,224,138,0.14); color:var(--green);}
 .pill.red{background:rgba(255,93,122,0.14); color:var(--red);}
 .pill.amber{background:rgba(255,184,77,0.14); color:var(--amber);}
+.pill.blue{background:rgba(90,200,250,0.14); color:var(--blue);}
 .pill.gray{background:rgba(255,255,255,0.08); color:var(--text-dim);}
 .row-actions{display:flex; gap:6px;}
 .icon-btn{
@@ -717,18 +720,31 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
 
           <div class="section-title"><div><h2>Análises</h2><div class="sub">Receitas, despesas e categorias — clique numa categoria pra ver o detalhe</div></div></div>
           <div id="filtersSlotAnalises" style="margin-bottom:16px;"></div>
-          <div class="charts-grid">
-            <div class="chart-card"><h4>Receitas x Despesas (12 meses)</h4><div class="chart-holder"><canvas id="chartRxD"></canvas></div></div>
+          <div class="charts-grid-3">
             <div class="chart-card">
-              <h4>Gastos por categoria</h4>
-              <div class="chart-holder"><canvas id="chartCat"></canvas></div>
+              <h4>Receitas x Despesas</h4><div class="sub" style="font-size:11.5px; color:var(--text-secondary); margin-top:-6px;">Últimos 6 meses</div>
+              <div class="chart-holder small"><canvas id="chartRxD"></canvas></div>
+              <div class="chart-insight" id="insightRxD"></div>
+            </div>
+            <div class="chart-card">
+              <h4>Gastos por categoria</h4><div class="sub" style="font-size:11.5px; color:var(--text-secondary); margin-top:-6px;">Este mês</div>
+              <div class="chart-holder small"><canvas id="chartCat"></canvas></div>
+              <div class="chart-insight" id="insightCat"></div>
               <div id="categoryDrilldown"></div>
             </div>
+            <div class="chart-card">
+              <h4>Evolução das reservas</h4><div class="sub" style="font-size:11.5px; color:var(--text-secondary); margin-top:-6px;">Últimos 6 meses</div>
+              <div class="chart-holder small"><canvas id="chartReserves"></canvas></div>
+              <div class="chart-insight" id="insightReserves"></div>
+            </div>
           </div>
-          <div class="charts-grid-3" style="margin-top:16px;">
+          <div class="charts-grid" style="margin-top:16px;">
             <div class="chart-card"><h4>Faturas por cartão</h4><div class="chart-holder small"><canvas id="chartInvoices"></canvas></div></div>
-            <div class="chart-card"><h4>Evolução das reservas</h4><div class="chart-holder small"><canvas id="chartReserves"></canvas></div></div>
-            <div class="chart-card"><h4>Este mês x média (6m)</h4><div class="chart-holder small"><canvas id="chartComparison"></canvas></div></div>
+            <div class="chart-card">
+              <h4>Este mês x média (6m)</h4>
+              <div class="chart-holder small"><canvas id="chartComparison"></canvas></div>
+              <div class="chart-insight" id="insightComparison"></div>
+            </div>
           </div>
           <div class="charts-grid" style="margin-top:16px;">
             <div class="chart-card"><h4>Próximos vencimentos</h4><div id="upcomingList"></div></div>
@@ -1280,7 +1296,7 @@ function populateFilters(){
 }
 
 function filteredMovements(){
-  return DB.movements.filter(m=>{
+  return [...DB.movements].reverse().filter(m=>{
     if(FILTERS.month && m.date.slice(5,7) !== FILTERS.month) return false;
     if(FILTERS.year && m.date.slice(0,4) !== FILTERS.year) return false;
     if(FILTERS.account && m.account !== FILTERS.account) return false;
@@ -1380,12 +1396,13 @@ function fixedExpensesTotals(){
 }
 function eventsTotals(){
   const total = DB.events.length;
-  const paid = DB.events.filter(e=>e.paid);
-  const pending = DB.events.filter(e=>!e.paid);
+  const paid = DB.events.filter(e=>e.status==='pago');
+  const pending = DB.events.filter(e=>e.status==='pendente');
+  const scheduled = DB.events.filter(e=>e.status==='agendado');
   const received = paid.reduce((s,e)=>s+Number(e.totalValue),0);
   const toReceive = pending.reduce((s,e)=>s+Number(e.totalValue),0);
   const last = [...DB.events].sort((a,b)=>b.date.localeCompare(a.date))[0];
-  return {total, paidCount:paid.length, pendingCount:pending.length, received, toReceive, last};
+  return {total, paidCount:paid.length, pendingCount:pending.length, scheduledCount:scheduled.length, received, toReceive, last};
 }
 function autoLaunchRecurring(){
   // Lança sozinho, uma vez por mês, os gastos fixos e parcelas ativas — sem duplicar
@@ -1456,6 +1473,16 @@ function migrateBaselines(){
       // do app antes da distinção entre fechada/aberta existir).
       const {lastClosedCycle} = getCardCycles(c.closingDay);
       c.invoiceBaselineCycle = lastClosedCycle;
+      changed = true;
+    }
+  });
+  (DB.events||[]).forEach(e=>{
+    if(!e.status){
+      e.status = e.paid ? 'pago' : 'pendente';
+      changed = true;
+    }
+    if(!e.items){
+      e.items = [{description:'Evento', value:Number(e.totalValue)||0}];
       changed = true;
     }
   });
@@ -1684,13 +1711,6 @@ function renderRecentMovList(){
 function renderDashSidePanel(){
   const panel = document.getElementById('dashSidePanel');
   if(!panel) return;
-  const alerts = computeAlerts().filter(a=>a.level!=='ok').slice(0,5);
-  const saldoTotal = totalAccountBalances();
-  const reserves = reservesTotals();
-  const t = cardTotals();
-  const instT = installmentsTotals();
-  const fixedT = fixedExpensesTotals();
-  const disponivelReal = saldoTotal + reserves.total - t.totalCurrent - t.totalNext - instT.monthlyCommitted - fixedT.monthlyTotal;
 
   const streakDays = [];
   const todayD = new Date();
@@ -1702,24 +1722,24 @@ function renderDashSidePanel(){
   }
   const activeDays = streakDays.filter(d=>d.count>0).length;
 
+  migrateSavingsGoals();
+  const goals = DB.savingsGoals || [];
+
   panel.innerHTML = `
     <div class="side-panel-card">
-      <h4>Pendências</h4>
-      ${alerts.length===0 ? `<div style="font-size:12px; color:var(--text-dim);">Nenhuma pendência no momento 🎉</div>` :
-        alerts.map(a=>`
-          <div class="alert-mini" style="padding:6px 0;">
-            <span class="dot ${a.level}"></span>
-            <span style="font-size:12px;">${a.title}</span>
-          </div>`).join('')}
-    </div>
-    <div class="side-panel-card">
-      <h4>Resumo rápido</h4>
-      <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0; border-bottom:1px solid var(--border);">
-        <span style="color:var(--text-dim);">Saldo total</span><b>${fmtBRL(saldoTotal)}</b>
-      </div>
-      <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0;">
-        <span style="color:var(--text-dim);">Disponível real</span><b style="color:${disponivelReal<0?'var(--red)':'var(--green)'}">${fmtBRL(disponivelReal)}</b>
-      </div>
+      <h4>Metas em andamento</h4>
+      ${goals.length===0 ? `<div style="font-size:12px; color:var(--text-dim);">Nenhuma meta criada ainda — dá uma olhada na aba Metas.</div>` :
+        goals.slice(0,3).map(g=>{
+          const current = Number(g.current)||0;
+          const pct = clamp((current/g.target)*100, 0, 100);
+          return `
+          <div style="margin-bottom:10px;">
+            <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
+              <span>${g.name||'Meta'}</span><span style="color:var(--text-secondary);">${pct.toFixed(0)}%</span>
+            </div>
+            <div class="budget-bar" style="height:7px;"><span style="width:${pct}%; background:linear-gradient(90deg, var(--purple), var(--green));"></span></div>
+          </div>`;
+        }).join('')}
     </div>
     <div class="side-panel-card">
       <h4>Constância — últimos 30 dias</h4>
@@ -1964,6 +1984,12 @@ function renderCardsCentral(){
   `;
 }
 
+function getInvoicePaymentHistory(cardName){
+  return DB.movements
+    .filter(m=>m.category==='Financeiro' && m.paymentMethod==='Transferência' && m.description===`Pagamento fatura ${cardName}`)
+    .sort((a,b)=>b.date.localeCompare(a.date));
+}
+
 function renderInvoicesView(){
   const container = document.getElementById('invoicesContainer');
   const excluded = DB.baselineExcludedIds || [];
@@ -1972,16 +1998,25 @@ function renderInvoicesView(){
     const items = DB.movements.filter(m=>m.account===c.name && m.paymentMethod==='Crédito' && m.type==='despesa' && !excluded.includes(m.id)).sort((a,b)=>b.date.localeCompare(a.date));
     const invoice = getComputedInvoice(c);
     const baseline = Number(c.currentInvoice)||0;
+    const payHistory = getInvoicePaymentHistory(c.name);
+    let payComparison = '';
+    if(payHistory.length>=2){
+      const diff = Number(payHistory[0].amount) - Number(payHistory[1].amount);
+      const pct = Math.abs(diff)/Number(payHistory[1].amount)*100;
+      payComparison = diff>=0
+        ? `<span style="color:var(--red);">${pct.toFixed(0)}% a mais</span> que a fatura paga anterior`
+        : `<span style="color:var(--green);">${pct.toFixed(0)}% a menos</span> que a fatura paga anterior`;
+    }
     return `
     <div class="chart-card" style="margin-bottom:16px;">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-        <h4>${c.name} <span style="color:var(--text-dim); font-weight:400;">— vencimento dia ${c.dueDay}</span></h4>
+        <h4>${c.name} <span style="color:var(--text-secondary); font-weight:400;">— vencimento dia ${c.dueDay}</span></h4>
         <div style="font-size:13px; display:flex; align-items:center; gap:10px;">
-          <span><span style="color:var(--text-dim);">Fatura fechada (calculada): </span><b style="color:var(--red);">${fmtBRL(invoice)}</b></span>
+          <span><span style="color:var(--text-secondary);">Fatura fechada (calculada): </span><b style="color:var(--red);">${fmtBRL(invoice)}</b></span>
           <button class="btn btn-sm" data-future-invoices="${c.name}">Ver faturas futuras</button>
         </div>
       </div>
-      <p style="font-size:11.5px; color:var(--text-dim); margin:6px 0 10px;">
+      <p style="font-size:11.5px; color:var(--text-secondary); margin:6px 0 10px;">
         Ponto de partida de ${fmtDate(asOf)}: ${fmtBRL(baseline)}${items.length?` + ${items.length} lançamento(s) em crédito desde então.`:' (nenhum lançamento novo ainda).'}
       </p>
       ${items.length===0 ? `<div class="empty-state">Nenhuma movimentação em crédito lançada para este cartão desde ${fmtDate(asOf)}. Lance em "+ Nova movimentação" com forma de pagamento Crédito, e a fatura atualiza sozinha.</div>` : `
@@ -1993,6 +2028,16 @@ function renderInvoicesView(){
           </tbody>
         </table>
       </div>`}
+
+      <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">
+        <b style="font-size:12.5px;">Histórico de faturas pagas</b>
+        ${payHistory.length===0 ? `<div style="font-size:12px; color:var(--text-secondary); margin-top:6px;">Nenhum pagamento registrado ainda.</div>` : `
+        <div style="margin-top:8px; display:flex; flex-direction:column; gap:6px;">
+          ${payHistory.slice(0,6).map(p=>`<div style="display:flex; justify-content:space-between; font-size:12.5px;"><span style="color:var(--text-secondary);">${fmtDate(p.date)}</span><b>${fmtBRL(p.amount)}</b></div>`).join('')}
+        </div>
+        ${payComparison ? `<div style="font-size:11.5px; color:var(--text-secondary); margin-top:8px;">Última fatura paga: ${payComparison}.</div>` : ''}
+        `}
+      </div>
     </div>`;
   }).join('');
 
@@ -2104,7 +2149,7 @@ function chartDefaults(){
 
 function renderChartRxD(){
   destroyChart('rxd');
-  const comps = last12Competencias();
+  const comps = last12Competencias().slice(-6);
   const receitas = comps.map(c=>sumByTypeComp(c,'receita'));
   const despesas = comps.map(c=>sumByTypeComp(c,'despesa'));
   const labels = comps.map(c=>MONTH_NAMES[Number(c.slice(5,7))-1]+'/'+c.slice(2,4));
@@ -2129,6 +2174,21 @@ function renderChartRxD(){
       }
     }
   });
+
+  const totalReceitas = receitas.reduce((s,v)=>s+v,0);
+  const totalDespesas = despesas.reduce((s,v)=>s+v,0);
+  const insightEl = document.getElementById('insightRxD');
+  if(insightEl){
+    if(totalDespesas===0 && totalReceitas===0){
+      insightEl.textContent = 'Ainda não há dados suficientes nesse período.';
+    } else {
+      const diff = totalReceitas - totalDespesas;
+      const pct = totalDespesas>0 ? Math.abs(((totalReceitas-totalDespesas)/totalDespesas)*100) : 100;
+      insightEl.innerHTML = diff>=0
+        ? `Suas receitas estão <b style="color:var(--green);">${pct.toFixed(0)}% acima</b> das despesas no acumulado do período.`
+        : `Suas despesas estão <b style="color:var(--red);">${pct.toFixed(0)}% acima</b> das receitas no acumulado do período.`;
+    }
+  }
 }
 
 function renderChartCat(){
@@ -2167,6 +2227,17 @@ function renderChartCat(){
   if(CURRENT_DRILLDOWN_CATEGORY && byCat[CURRENT_DRILLDOWN_CATEGORY]!==undefined){
     showCategoryDrilldown(CURRENT_DRILLDOWN_CATEGORY);
   }
+
+  const insightEl = document.getElementById('insightCat');
+  if(insightEl){
+    if(entries.length===0){
+      insightEl.textContent = 'Nenhum gasto lançado ainda esse mês.';
+    } else {
+      const top = entries[entries.length-1]; // maior valor (array está em ordem crescente)
+      const pct = (top[1]/total)*100;
+      insightEl.innerHTML = `<b>${top[0]}</b> foi sua maior categoria de gasto, representando <b>${pct.toFixed(0)}%</b> do total.`;
+    }
+  }
 }
 
 function renderChartInvoices(){
@@ -2175,8 +2246,8 @@ function renderChartInvoices(){
   charts.inv = new Chart(ctx, {
     type:'bar',
     data:{labels:DB.cards.map(c=>c.name), datasets:[
-      {label:'Fatura atual', data:DB.cards.map(c=>getComputedInvoice(c)), backgroundColor:'#ff5d7a', borderRadius:6},
-      {label:'Próxima fatura', data:DB.cards.map(c=>getComputedNextInvoice(c)), backgroundColor:'#ffb84d', borderRadius:6},
+      {label:'Fatura fechada', data:DB.cards.map(c=>getComputedInvoice(c)), backgroundColor:'#ff5d7a', borderRadius:6},
+      {label:'Fatura atual (aberto)', data:DB.cards.map(c=>getComputedNextInvoice(c)), backgroundColor:'#ffb84d', borderRadius:6},
     ]},
     options:{
       responsive:true, maintainAspectRatio:false,
@@ -2213,6 +2284,21 @@ function renderChartComparison(){
       scales:{x:{grid:{display:false}}, y:{grid:{color:'rgba(255,255,255,0.05)'}, ticks:{callback:(v)=>'R$ '+v}}}
     }
   });
+
+  const insightEl = document.getElementById('insightComparison');
+  if(insightEl){
+    const prevComp = prevCompetencia(current);
+    const prevDespesa = sumByTypeComp(prevComp,'despesa');
+    if(prevDespesa===0){
+      insightEl.textContent = 'Ainda não há dados do mês anterior pra comparar.';
+    } else {
+      const diff = curDespesa - prevDespesa;
+      const pct = (Math.abs(diff)/prevDespesa)*100;
+      insightEl.innerHTML = diff>=0
+        ? `Até agora, você já gastou <b style="color:var(--red);">${pct.toFixed(1)}%</b> (${fmtBRL(Math.abs(diff))}) a mais do que gastou no mês passado.`
+        : `Até agora, você gastou <b style="color:var(--green);">${pct.toFixed(1)}%</b> (${fmtBRL(Math.abs(diff))}) a menos do que no mês passado.`;
+    }
+  }
 }
 
 function renderChartReserves(canvasId, chartKey){
@@ -2240,6 +2326,24 @@ function renderChartReserves(canvasId, chartKey){
       scales:{x:{grid:{display:false}}, y:{grid:{color:'rgba(255,255,255,0.05)'}, ticks:{callback:(v)=>'R$ '+v}}}
     }
   });
+
+  if(canvasId==='chartReserves'){
+    const insightEl = document.getElementById('insightReserves');
+    if(insightEl){
+      const totalNow = seriesNu[seriesNu.length-1] + seriesNe[seriesNe.length-1];
+      const totalPrev = seriesNu[seriesNu.length-2] + seriesNe[seriesNe.length-2];
+      if(totalPrev===0 && totalNow===0){
+        insightEl.textContent = 'Ainda não há reservas registradas.';
+      } else if(totalPrev===0){
+        insightEl.innerHTML = `Você começou a reservar esse mês — total atual de <b>${fmtBRL(totalNow)}</b>.`;
+      } else {
+        const pct = ((totalNow-totalPrev)/Math.abs(totalPrev))*100;
+        insightEl.innerHTML = pct>=0
+          ? `Suas reservas cresceram <b style="color:var(--green);">${pct.toFixed(0)}%</b> em relação ao mês passado.`
+          : `Suas reservas caíram <b style="color:var(--red);">${Math.abs(pct).toFixed(0)}%</b> em relação ao mês passado.`;
+      }
+    }
+  }
 }
 
 let CURRENT_DRILLDOWN_CATEGORY = null;
@@ -2301,7 +2405,7 @@ function computeAlerts(){
     const daysToDue = daysUntilDay(c.dueDay);
     if(daysToDue <= 5 && daysToDue >= 0) alerts.push({level:'warn', title:`Fatura do ${c.name} vence em breve`, desc:`Vencimento em ${daysToDue} dia(s), dia ${c.dueDay}.`});
   });
-  DB.events.filter(e=>!e.paid).forEach(e=>{
+  DB.events.filter(e=>e.status==='pendente').forEach(e=>{
     alerts.push({level:'warn', title:`Evento #${e.number} pendente de pagamento`, desc:`${e.local} — ${fmtBRL(e.totalValue)}`});
   });
   const reserves = reservesTotals();
@@ -2590,31 +2694,39 @@ function renderEventsView(){
   const ev = eventsTotals();
   document.getElementById('eventsKpi').innerHTML = [
     kpiCard({icon:'events',color:'purple',title:'Total de eventos', value:ev.total}),
-    kpiCard({icon:'events',color:'green',title:'Eventos pagos', value:ev.paidCount}),
-    kpiCard({icon:'events',color:'amber',title:'Eventos pendentes', value:ev.pendingCount}),
+    kpiCard({icon:'events',color:'blue',title:'Agendados', value:ev.scheduledCount}),
+    kpiCard({icon:'events',color:'amber',title:'Pendentes', value:ev.pendingCount}),
+    kpiCard({icon:'events',color:'green',title:'Pagos', value:ev.paidCount}),
     kpiCard({icon:'up',color:'green',title:'Valor recebido', value:fmtBRL(ev.received)}),
     kpiCard({icon:'down',color:'amber',title:'Valor a receber', value:fmtBRL(ev.toReceive)}),
-    kpiCard({icon:'events',color:'blue',title:'Último evento', value: ev.last ? fmtDate(ev.last.date) : '—'}),
   ].join('');
 
   const tbody = document.getElementById('eventTableBody');
   const list = [...DB.events].sort((a,b)=>b.date.localeCompare(a.date));
   if(list.length===0){ tbody.innerHTML = `<tr><td colspan="9">${emptyStateHTML('Nenhum evento cadastrado ainda.')}</td></tr>`; return; }
-  tbody.innerHTML = list.map(e=>`
+  const statusLabel = {agendado:'Agendado', pendente:'Pendente', pago:'Pago'};
+  const statusColor = {agendado:'blue', pendente:'amber', pago:'green'};
+  tbody.innerHTML = list.map(e=>{
+    const items = e.items||[];
+    const itemsLine = items.length>0
+      ? `<div style="font-size:11px; color:var(--text-secondary); margin-top:3px;">${items.map(it=>`${it.description}: ${fmtBRL(it.value)}`).join(' · ')}</div>`
+      : '';
+    return `
     <tr>
       <td>#${e.number}</td>
       <td>${fmtDate(e.date)}</td>
-      <td>${e.local}</td>
+      <td><b>${e.local}</b>${itemsLine}</td>
       <td>${e.type}</td>
       <td>${e.function}</td>
       <td>${e.hours}h</td>
       <td style="font-weight:700;">${fmtBRL(e.totalValue)}</td>
-      <td><span class="pill ${e.paid?'green':'amber'}">${e.paid?'Pago':'Pendente'}</span></td>
+      <td><span class="pill ${statusColor[e.status]}">${statusLabel[e.status]}</span></td>
       <td><div class="row-actions">
         <button class="icon-btn" data-edit-ev="${e.id}">${ICONS.edit}</button>
         <button class="icon-btn" data-del-ev="${e.id}">${ICONS.trash}</button>
       </div></td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 
   tbody.querySelectorAll('[data-edit-ev]').forEach(b=>b.addEventListener('click', ()=>openEventModal(b.dataset.editEv)));
   tbody.querySelectorAll('[data-del-ev]').forEach(b=>b.addEventListener('click', ()=>{
@@ -2625,10 +2737,45 @@ function renderEventsView(){
   }));
 }
 
+let EVENT_ITEMS_DRAFT = [];
+function renderEventItemsEditor(){
+  const box = document.getElementById('eventItemsBox');
+  if(!box) return;
+  const total = EVENT_ITEMS_DRAFT.reduce((s,it)=>s+Number(it.value||0),0);
+  box.innerHTML = `
+    ${EVENT_ITEMS_DRAFT.map((it,idx)=>`
+      <div style="display:flex; gap:8px; margin-bottom:8px;">
+        <input type="text" placeholder="Descrição (ex: Hora extra, Montagem...)" value="${it.description||''}" data-item-desc="${idx}" style="flex:2;">
+        <input type="number" step="0.01" placeholder="Valor" value="${it.value||''}" data-item-value="${idx}" style="flex:1;">
+        <button type="button" class="icon-btn" data-item-del="${idx}">${ICONS.trash}</button>
+      </div>`).join('')}
+    <button type="button" class="btn btn-sm" id="btnAddEventItem">+ Adicionar item</button>
+    <div style="display:flex; justify-content:space-between; margin-top:10px; padding-top:10px; border-top:1px solid var(--border); font-size:14px;">
+      <b>Total do evento</b><b style="color:var(--green);">${fmtBRL(total)}</b>
+    </div>
+  `;
+  box.querySelectorAll('[data-item-desc]').forEach(inp=>inp.addEventListener('input', (ev)=>{
+    EVENT_ITEMS_DRAFT[inp.dataset.itemDesc].description = ev.target.value;
+  }));
+  box.querySelectorAll('[data-item-value]').forEach(inp=>inp.addEventListener('input', (ev)=>{
+    EVENT_ITEMS_DRAFT[inp.dataset.itemValue].value = parseFloat(ev.target.value)||0;
+    renderEventItemsEditor();
+  }));
+  box.querySelectorAll('[data-item-del]').forEach(btn=>btn.addEventListener('click', ()=>{
+    EVENT_ITEMS_DRAFT.splice(Number(btn.dataset.itemDel),1);
+    renderEventItemsEditor();
+  }));
+  document.getElementById('btnAddEventItem').addEventListener('click', ()=>{
+    EVENT_ITEMS_DRAFT.push({description:'', value:0});
+    renderEventItemsEditor();
+  });
+}
+
 function openEventModal(id){
   const editing = id ? DB.events.find(e=>e.id===id) : null;
   const nextNumber = editing ? editing.number : (Math.max(0,...DB.events.map(e=>e.number))+1);
-  const e = editing || {number:nextNumber, date:todayISO(), local:'', type:EVENT_TYPES[0], function:FUNCTIONS[0], hours:6, additional:0, paid:false, paymentDate:'', notes:''};
+  const e = editing || {number:nextNumber, date:todayISO(), local:'', type:EVENT_TYPES[0], function:FUNCTIONS[0], hours:'', status:'agendado', paymentDate:'', notes:''};
+  EVENT_ITEMS_DRAFT = editing && editing.items ? editing.items.map(it=>({...it})) : (editing ? [{description:'Evento', value:Number(editing.totalValue)||0}] : []);
   openModal(`
     <div class="modal-head"><h3>${editing?'Editar':'Novo'} evento</h3><button id="modalClose">&times;</button></div>
     <div class="form-grid">
@@ -2637,11 +2784,21 @@ function openEventModal(id){
       <div class="field full"><label>Local</label><input type="text" id="f_local" value="${e.local}"></div>
       <div class="field"><label>Tipo do evento</label><select id="f_evtype">${EVENT_TYPES.map(t=>`<option ${t===e.type?'selected':''}>${t}</option>`).join('')}</select></div>
       <div class="field"><label>Função</label><select id="f_func">${FUNCTIONS.map(f=>`<option ${f===e.function?'selected':''}>${f}</option>`).join('')}</select></div>
-      <div class="field"><label>Horas</label><input type="number" id="f_hours" value="${e.hours}"></div>
-      <div class="field"><label>Adicional (R$)</label><input type="number" step="0.01" id="f_add" value="${e.additional}"></div>
-      <div class="field"><label>Valor/hora (R$)</label><input type="number" step="0.01" id="f_vh" value="25"></div>
-      <div class="field"><label>Pago?</label><select id="f_paid"><option value="nao" ${!e.paid?'selected':''}>Não</option><option value="sim" ${e.paid?'selected':''}>Sim</option></select></div>
+      <div class="field"><label>Horas (previstas ou realizadas)</label><input type="number" id="f_hours" value="${e.hours}"></div>
+      <div class="field"><label>Status</label>
+        <select id="f_status">
+          <option value="agendado" ${e.status==='agendado'?'selected':''}>Agendado (ainda vai acontecer)</option>
+          <option value="pendente" ${e.status==='pendente'?'selected':''}>Pendente (aconteceu, aguardando pagamento)</option>
+          <option value="pago" ${e.status==='pago'?'selected':''}>Pago</option>
+        </select>
+      </div>
       <div class="field"><label>Data do pagamento</label><input type="date" id="f_paydate" value="${e.paymentDate||''}"></div>
+    </div>
+    <div style="margin-top:14px;">
+      <label style="font-size:12px; color:var(--text-secondary); display:block; margin-bottom:8px;">Itens do evento (some pra formar o total — ex: Evento, Hora extra, Adicional de montagem)</label>
+      <div id="eventItemsBox"></div>
+    </div>
+    <div class="form-grid" style="margin-top:14px;">
       <div class="field full"><label>Observações</label><textarea id="f_notes">${e.notes||''}</textarea></div>
     </div>
     <div class="modal-actions">
@@ -2649,20 +2806,19 @@ function openEventModal(id){
       <button class="btn btn-primary" id="modalSave">Salvar</button>
     </div>
   `);
+  renderEventItemsEditor();
   document.getElementById('modalSave').addEventListener('click', ()=>{
-    const hours = parseFloat(document.getElementById('f_hours').value)||0;
-    const vh = parseFloat(document.getElementById('f_vh').value)||0;
-    const additional = parseFloat(document.getElementById('f_add').value)||0;
-    const base = hours*vh;
-    const total = base+additional;
-    const paid = document.getElementById('f_paid').value==='sim';
+    const items = EVENT_ITEMS_DRAFT.filter(it=>it.description && it.description.trim());
+    const total = items.reduce((s,it)=>s+Number(it.value||0),0);
     const payload = {
       number: parseInt(document.getElementById('f_number').value)||nextNumber,
       date: document.getElementById('f_date').value,
       local: document.getElementById('f_local').value,
       type: document.getElementById('f_evtype').value,
       function: document.getElementById('f_func').value,
-      hours, additional, baseValue:base, totalValue:total, paid,
+      hours: parseFloat(document.getElementById('f_hours').value)||0,
+      items, totalValue: total,
+      status: document.getElementById('f_status').value,
       paymentDate: document.getElementById('f_paydate').value,
       notes: document.getElementById('f_notes').value
     };
