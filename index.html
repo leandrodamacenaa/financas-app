@@ -376,6 +376,11 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
   border-radius:9px; padding:9px 11px; font-size:13px;
 }
 .field textarea{resize:vertical; min-height:56px;}
+.event-item-row input, .event-item-row select{
+  background:#0f0f17; border:1px solid var(--border); color:var(--text);
+  border-radius:9px; padding:8px 10px; font-size:13px;
+}
+.event-item-row input::placeholder{color:var(--text-secondary);}
 .modal-actions{display:flex; justify-content:flex-end; gap:10px; margin-top:20px;}
 
 /* SETTINGS */
@@ -2845,6 +2850,13 @@ function renderEventsView(){
 }
 
 let EVENT_ITEMS_DRAFT = [];
+function updateEventItemsTotal(){
+  const totalEl = document.getElementById('eventItemsTotal');
+  if(!totalEl) return;
+  const total = EVENT_ITEMS_DRAFT.reduce((s,it)=>s+Number(it.value||0),0);
+  totalEl.textContent = fmtBRL(total);
+}
+
 function renderEventItemsEditor(){
   const box = document.getElementById('eventItemsBox');
   if(!box) return;
@@ -2853,9 +2865,9 @@ function renderEventItemsEditor(){
     ${EVENT_ITEMS_DRAFT.map((it,idx)=>{
       const isHora = it.mode === 'hora';
       return `
-      <div style="display:flex; gap:8px; margin-bottom:8px; align-items:center; flex-wrap:wrap;">
+      <div class="event-item-row" style="display:flex; gap:8px; margin-bottom:8px; align-items:center; flex-wrap:wrap;">
         <input type="text" placeholder="Descrição (ex: Evento, Hora extra, Montagem...)" value="${it.description||''}" data-item-desc="${idx}" style="flex:2; min-width:140px;">
-        <select data-item-mode="${idx}" style="flex:0 0 120px;">
+        <select data-item-mode="${idx}" style="flex:0 0 130px;">
           <option value="fixo" ${!isHora?'selected':''}>Valor fixo</option>
           <option value="hora" ${isHora?'selected':''}>Horas × valor/h</option>
         </select>
@@ -2863,7 +2875,7 @@ function renderEventItemsEditor(){
           <input type="number" step="0.5" placeholder="Horas" value="${it.hours||''}" data-item-hours="${idx}" style="flex:0 0 80px;">
           <span style="color:var(--text-secondary); font-size:12px;">×</span>
           <input type="number" step="0.01" placeholder="R$/hora" value="${it.rate||''}" data-item-rate="${idx}" style="flex:0 0 90px;">
-          <span style="font-size:13px; font-weight:700; flex:0 0 80px;">${fmtBRL(it.value||0)}</span>
+          <span style="font-size:13px; font-weight:700; flex:0 0 80px;" id="eventItemValue-${idx}">${fmtBRL(it.value||0)}</span>
         ` : `
           <input type="number" step="0.01" placeholder="Valor" value="${it.value||''}" data-item-value="${idx}" style="flex:1; min-width:90px;">
         `}
@@ -2872,7 +2884,7 @@ function renderEventItemsEditor(){
     }).join('')}
     <button type="button" class="btn btn-sm" id="btnAddEventItem">+ Adicionar item</button>
     <div style="display:flex; justify-content:space-between; margin-top:10px; padding-top:10px; border-top:1px solid var(--border); font-size:14px;">
-      <b>Total do evento</b><b style="color:var(--green);">${fmtBRL(total)}</b>
+      <b>Total do evento</b><b style="color:var(--green);" id="eventItemsTotal">${fmtBRL(total)}</b>
     </div>
   `;
   box.querySelectorAll('[data-item-desc]').forEach(inp=>inp.addEventListener('input', (ev)=>{
@@ -2882,23 +2894,29 @@ function renderEventItemsEditor(){
     const it = EVENT_ITEMS_DRAFT[sel.dataset.itemMode];
     it.mode = ev.target.value;
     if(it.mode==='hora'){ it.hours = it.hours||0; it.rate = it.rate||0; it.value = Number(it.hours)*Number(it.rate); }
-    renderEventItemsEditor();
+    renderEventItemsEditor(); // muda os campos exibidos, precisa recriar mesmo
   }));
   box.querySelectorAll('[data-item-value]').forEach(inp=>inp.addEventListener('input', (ev)=>{
     EVENT_ITEMS_DRAFT[inp.dataset.itemValue].value = parseFloat(ev.target.value)||0;
-    renderEventItemsEditor();
+    updateEventItemsTotal(); // só atualiza o total, sem recriar os campos (mantém o foco)
   }));
   box.querySelectorAll('[data-item-hours]').forEach(inp=>inp.addEventListener('input', (ev)=>{
-    const it = EVENT_ITEMS_DRAFT[inp.dataset.itemHours];
+    const idx = inp.dataset.itemHours;
+    const it = EVENT_ITEMS_DRAFT[idx];
     it.hours = parseFloat(ev.target.value)||0;
     it.value = Number(it.hours)*Number(it.rate||0);
-    renderEventItemsEditor();
+    const disp = document.getElementById(`eventItemValue-${idx}`);
+    if(disp) disp.textContent = fmtBRL(it.value);
+    updateEventItemsTotal();
   }));
   box.querySelectorAll('[data-item-rate]').forEach(inp=>inp.addEventListener('input', (ev)=>{
-    const it = EVENT_ITEMS_DRAFT[inp.dataset.itemRate];
+    const idx = inp.dataset.itemRate;
+    const it = EVENT_ITEMS_DRAFT[idx];
     it.rate = parseFloat(ev.target.value)||0;
     it.value = Number(it.hours||0)*Number(it.rate);
-    renderEventItemsEditor();
+    const disp = document.getElementById(`eventItemValue-${idx}`);
+    if(disp) disp.textContent = fmtBRL(it.value);
+    updateEventItemsTotal();
   }));
   box.querySelectorAll('[data-item-del]').forEach(btn=>btn.addEventListener('click', ()=>{
     EVENT_ITEMS_DRAFT.splice(Number(btn.dataset.itemDel),1);
