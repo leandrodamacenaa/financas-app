@@ -2027,22 +2027,31 @@ function getPastInvoicesByCard(cardName, monthsBack){
   if(!c) return [];
   const {lastClosedCycle} = getCardCycles(c.closingDay);
   const excluded = DB.baselineExcludedIds || [];
+  const manual = DB.pastInvoicesManual || {};
   const result = [];
   const [ly, lm] = lastClosedCycle.split('-').map(Number);
   for(let k=0; k<monthsBack; k++){
     const d = new Date(ly, lm-1-k, 1); // lastClosedCycle é o mês 0, cada k volta 1 mês
     const cycleLabel = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-    let total = DB.movements
-      .filter(m=>m.account===cardName && m.paymentMethod==='Crédito' && m.type==='despesa' && !excluded.includes(m.id)
-        && getInvoiceCycle(m.date, c.closingDay) === cycleLabel)
-      .reduce((s,m)=>s+Number(m.amount), 0);
-    let isEstimate = false;
-    if(k===0 && total===0 && Number(c.currentInvoice)>0 && (c.invoiceBaselineCycle||cycleLabel)===cycleLabel){
-      // a fatura mais recente pode estar só na baseline (correção manual), sem lançamentos detalhados
-      total = Number(c.currentInvoice);
-      isEstimate = true;
+    const manualKey = `${cardName}|${cycleLabel}`;
+    let total, isEstimate = false, isManual = false;
+    if(manual[manualKey] !== undefined){
+      // valor digitado manualmente por você — só um registro histórico, não mexe em
+      // nenhum cálculo de fatura atual, limite ou KPI do resto do app.
+      total = Number(manual[manualKey]);
+      isManual = true;
+    } else {
+      total = DB.movements
+        .filter(m=>m.account===cardName && m.paymentMethod==='Crédito' && m.type==='despesa' && !excluded.includes(m.id)
+          && getInvoiceCycle(m.date, c.closingDay) === cycleLabel)
+        .reduce((s,m)=>s+Number(m.amount), 0);
+      if(k===0 && total===0 && Number(c.currentInvoice)>0 && (c.invoiceBaselineCycle||cycleLabel)===cycleLabel){
+        // a fatura mais recente pode estar só na baseline (correção manual), sem lançamentos detalhados
+        total = Number(c.currentInvoice);
+        isEstimate = true;
+      }
     }
-    result.push({cycle:cycleLabel, label:`${MONTH_NAMES_FULL[d.getMonth()]} de ${d.getFullYear()}`, total, isEstimate});
+    result.push({cycle:cycleLabel, label:`${MONTH_NAMES_FULL[d.getMonth()]} de ${d.getFullYear()}`, total, isEstimate, isManual});
   }
   return result;
 }
@@ -2056,7 +2065,7 @@ function getInvoicePaymentHistory(cardName){
 function renderInvoiceHistoryView(){
   const container = document.getElementById('invoiceHistoryContainer');
   if(!container) return;
-  container.innerHTML = `<div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px;">${DB.cards.map(c=>{
+  container.innerHTML = `<div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:14px;">${DB.cards.map(c=>{
     const past = getPastInvoicesByCard(c.name, 6);
     const maxVal = Math.max(1, ...past.map(p=>p.total));
     return `
@@ -2065,16 +2074,53 @@ function renderInvoiceHistoryView(){
       <div style="display:flex; flex-direction:column; gap:8px; margin-top:10px;">
         ${past.map(p=>`
           <div>
-            <div style="display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:3px;">
-              <span style="color:var(--text-secondary);">${p.label}${p.isEstimate?' *':''}</span>
-              <b>${fmtBRL(p.total)}</b>
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:12.5px; margin-bottom:3px;">
+              <span style="color:var(--text-secondary);">${p.label}${p.isEstimate?' *':''}${p.isManual?' ✎':''}</span>
+              <span style="display:flex; align-items:center; gap:6px;">
+                <b>${fmtBRL(p.total)}</b>
+                <button class="icon-btn" data-edit-past-invoice="${c.name}|${p.cycle}" style="width:22px; height:22px;">${ICONS.edit}</button>
+              </span>
             </div>
             <div class="budget-bar" style="height:6px;"><span style="width:${(p.total/maxVal)*100}%; background:${CARD_COLORS[c.name]||'var(--purple)'};"></span></div>
           </div>`).join('')}
       </div>
-      ${past.some(p=>p.isEstimate) ? `<p style="font-size:10.5px; color:var(--text-secondary); margin-top:10px;">* fatura corrigida manualmente, sem lançamentos detalhados nesse ciclo.</p>` : ''}
+      ${past.some(p=>p.isEstimate) ? `<p style="font-size:10.5px; color:var(--text-secondary); margin-top:10px;">* fatura corrigida manualmente na aba Cartões, sem lançamentos detalhados nesse ciclo.</p>` : ''}
+      ${past.some(p=>p.isManual) ? `<p style="font-size:10.5px; color:var(--text-secondary); margin-top:4px;">✎ valor digitado à mão, só histórico — não afeta nenhum cálculo atual.</p>` : ''}
     </div>`;
   }).join('')}</div>`;
+
+  container.querySelectorAll('[data-edit-past-invoice]').forEach(btn=>{
+    btn.addEventListener('click', ()=>openPastInvoiceEditModal(btn.dataset.editPastInvoice));
+  });
+}
+
+function openPastInvoiceEditModal(key){
+  const [cardName, cycle] = key.split('|');
+  const [y, m] = cycle.split('-').map(Number);
+  const label = `${MONTH_NAMES_FULL[m-1]} de ${y}`;
+  const manual = DB.pastInvoicesManual || {};
+  const current = manual[key];
+  openModal(`
+    <div class="modal-head"><h3>Fatura de ${label} — ${cardName}</h3><button id="modalClose">&times;</button></div>
+    <div class="form-grid">
+      <div class="field full"><label>Valor da fatura (R$)</label><input type="number" step="0.01" id="f_pastvalue" value="${current!==undefined ? current : ''}" placeholder="Ex: 850.00"></div>
+    </div>
+    <p style="font-size:11.5px; color:var(--text-secondary); margin-top:4px;">
+      Isso é só um registro histórico pra você ter o valor guardado — não muda a fatura atual, o limite
+      disponível nem nenhum outro número do dashboard.
+    </p>
+    <div class="modal-actions">
+      <button class="btn" id="modalCancel">Cancelar</button>
+      <button class="btn btn-primary" id="modalSave">Salvar</button>
+    </div>
+  `);
+  document.getElementById('modalSave').addEventListener('click', ()=>{
+    const val = parseFloat(document.getElementById('f_pastvalue').value);
+    if(isNaN(val) || val<0){ showToast('Preencha um valor válido.'); return; }
+    DB.pastInvoicesManual = DB.pastInvoicesManual || {};
+    DB.pastInvoicesManual[key] = val;
+    saveDB(DB); closeModal(); renderAll(); showToast('Fatura histórica salva.');
+  });
 }
 
 function renderInvoicesView(){
