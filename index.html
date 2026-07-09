@@ -3196,8 +3196,10 @@ function openCardModal(name){
     const correctingAvail = !isNaN(newAvail) && Math.abs(newAvail-availAtual)>=0.01;
 
     if(correctingInvoice || correctingNextInvoice){
-      if(correctingInvoice){ c.currentInvoice = newInvoice; }
-      if(correctingNextInvoice){ c.nextInvoiceBaseline = newNextInvoice; }
+      // preserva o valor que NÃO está sendo corrigido agora (senão ele se perderia
+      // ao resetar a exclusão) — só o campo que você realmente digitou muda.
+      c.currentInvoice = correctingInvoice ? newInvoice : invoiceFechada;
+      c.nextInvoiceBaseline = correctingNextInvoice ? newNextInvoice : invoiceAberta;
       const {lastClosedCycle} = getCardCycles(c.closingDay);
       c.invoiceBaselineCycle = lastClosedCycle;
       resetCardBaseline(c); // só esse cartão "esquece" as movimentações já contadas
@@ -3254,9 +3256,11 @@ function openPayInvoiceModal(name){
     DB.pastInvoicesManual = DB.pastInvoicesManual || {};
     DB.pastInvoicesManual[`${c.name}|${lastClosedCycle}`] = invoiceAtual;
 
-    // 2) aplica o novo ponto de partida da fatura já com o pagamento descontado, e
-    //    "esquece" as movimentações já existentes SÓ desse cartão — outros cartões
-    //    não são afetados. Tudo ANTES de lançar o pagamento em si.
+    // 2) antes de "esquecer" as movimentações, preserva o que já estava acumulado na
+    //    fatura atual (em aberto) — senão esse valor se perderia ao resetar a exclusão.
+    //    Só depois disso aplicamos o novo ponto de partida da fatura fechada (já com o
+    //    pagamento descontado) e "esquecemos" as movimentações SÓ desse cartão.
+    c.nextInvoiceBaseline = getComputedNextInvoice(c);
     c.currentInvoice = Math.max(0, Math.round((invoiceAtual-valor)*100)/100);
     resetCardBaseline(c);
 
