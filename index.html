@@ -1562,6 +1562,20 @@ function migrateBaselines(){
     DB.baselinesInitialized = true;
     changed = true;
   }
+  if(!DB.perEntityExclusionsMigrated){
+    // migra a lista global antiga pra uma lista própria de cada cartão/conta —
+    // assim, corrigir um cartão não afeta mais o que aparece nos outros.
+    const legacy = DB.baselineExcludedIds || [];
+    DB.cards.forEach(c=>{
+      if(!c.excludedMovementIds) c.excludedMovementIds = [...legacy];
+    });
+    DB.accountExcludedIds = DB.accountExcludedIds || {};
+    ['Nubank','PicPay','Mercado Pago'].forEach(name=>{
+      if(!DB.accountExcludedIds[name]) DB.accountExcludedIds[name] = [...legacy];
+    });
+    DB.perEntityExclusionsMigrated = true;
+    changed = true;
+  }
   const nextComp = nextCompetencia(currentCompetencia());
   (DB.fixedExpenses||[]).forEach(f=>{
     if(!f.autoLaunchFrom){ f.autoLaunchFrom = nextComp; changed = true; }
@@ -1571,29 +1585,19 @@ function migrateBaselines(){
   });
   return changed;
 }
-function freezeAllBaselines(){
-  // Congela o valor calculado de CADA cartão/conta na baseline dele, sem perder nada,
-  // antes de "esquecer" as movimentações já contadas. Marcamos explicitamente a qual
-  // ciclo (fechado) esse valor pertence, sem depender de recalcular a partir de uma data.
-  DB.cards.forEach(c2=>{
-    c2.currentInvoice = getComputedInvoice(c2);
-    c2.nextInvoiceBaseline = getComputedNextInvoice(c2);
-    const {lastClosedCycle} = getCardCycles(c2.closingDay);
-    c2.invoiceBaselineCycle = lastClosedCycle;
-    c2.invoiceBaselineDate = `${lastClosedCycle}-01`;
-  });
-  DB.accountBalances = DB.accountBalances || {};
-  ['Nubank','PicPay','Mercado Pago'].forEach(name=>{
-    DB.accountBalances[name] = getAccountBalance(name);
-  });
+function resetCardBaseline(c){
+  // "Esquece" as movimentações já contadas SÓ pra esse cartão — não mexe em mais nada.
+  c.excludedMovementIds = DB.movements.map(m=>m.id);
 }
-function finalizeBaselineReset(){
-  DB.baselineExcludedIds = DB.movements.map(m=>m.id);
+function resetAccountBaseline(name){
+  // "Esquece" as movimentações já contadas SÓ pra essa conta — não mexe em mais nada.
+  DB.accountExcludedIds = DB.accountExcludedIds || {};
+  DB.accountExcludedIds[name] = DB.movements.map(m=>m.id);
 }
 
 function getAccountBalance(name){
   const baseline = (DB.accountBalances && DB.accountBalances[name]) || 0;
-  const excluded = DB.baselineExcludedIds || [];
+  const excluded = (DB.accountExcludedIds && DB.accountExcludedIds[name]) || [];
   const delta = DB.movements
     .filter(m=> m.account===name && !excluded.includes(m.id) && (m.type==='receita' || m.paymentMethod!=='Crédito'))
     .reduce((s,m)=> s + (m.type==='receita' ? Number(m.amount) : -Number(m.amount)), 0);
@@ -1634,7 +1638,7 @@ function getComputedInvoice(c){
   const {lastClosedCycle} = getCardCycles(c.closingDay);
   const baselineCycle = c.invoiceBaselineCycle || lastClosedCycle;
   const baseline = (baselineCycle <= lastClosedCycle) ? (Number(c.currentInvoice)||0) : 0;
-  const excluded = DB.baselineExcludedIds || [];
+  const excluded = c.excludedMovementIds || [];
   const delta = DB.movements
     .filter(m=> m.account===c.name && m.paymentMethod==='Crédito' && m.type==='despesa' && !excluded.includes(m.id)
       && getInvoiceCycle(m.date, c.closingDay) <= lastClosedCycle)
@@ -1649,7 +1653,7 @@ function getComputedNextInvoice(c){
   const baselineCycle = c.invoiceBaselineCycle || lastClosedCycle;
   let baseline = Number(c.nextInvoiceBaseline)||0;
   if(baselineCycle > lastClosedCycle){ baseline += Number(c.currentInvoice)||0; }
-  const excluded = DB.baselineExcludedIds || [];
+  const excluded = c.excludedMovementIds || [];
   const delta = DB.movements
     .filter(m=> m.account===c.name && m.paymentMethod==='Crédito' && m.type==='despesa' && !excluded.includes(m.id)
       && getInvoiceCycle(m.date, c.closingDay) === openCycle)
@@ -2041,7 +2045,7 @@ function getPastInvoicesByCard(cardName, monthsBack){
   const c = DB.cards.find(x=>x.name===cardName);
   if(!c) return [];
   const {lastClosedCycle} = getCardCycles(c.closingDay);
-  const excluded = DB.baselineExcludedIds || [];
+  const excluded = c.excludedMovementIds || [];
   const manual = DB.pastInvoicesManual || {};
   const result = [];
   const [ly, lm] = lastClosedCycle.split('-').map(Number);
@@ -2140,33 +2144,54 @@ function openPastInvoiceEditModal(key){
 
 function renderInvoicesView(){
   const container = document.getElementById('invoicesContainer');
-  const excluded = DB.baselineExcludedIds || [];
   container.innerHTML = DB.cards.map(c=>{
-    const asOf = c.invoiceBaselineDate || '0000-01-01';
-    const items = DB.movements.filter(m=>m.account===c.name && m.paymentMethod==='Crédito' && m.type==='despesa' && !excluded.includes(m.id)).sort((a,b)=>b.date.localeCompare(a.date));
-    const invoice = getComputedInvoice(c);
-    const baseline = Number(c.currentInvoice)||0;
+    const excluded = c.excludedMovementIds || [];
+    const {openCycle} = getCardCycles(c.closingDay);
+    const items = DB.movements
+      .filter(m=>m.account===c.name && m.paymentMethod==='Crédito' && m.type==='despesa' && !excluded.includes(m.id)
+        && getInvoiceCycle(m.date, c.closingDay) === openCycle)
+      .sort((a,b)=>b.date.localeCompare(a.date));
+    const nextInv = getComputedNextInvoice(c);
+    const payHistory = getInvoicePaymentHistory(c.name);
+    let payComparison = '';
+    if(payHistory.length>=2){
+      const diff = Number(payHistory[0].amount) - Number(payHistory[1].amount);
+      const pct = Math.abs(diff)/Number(payHistory[1].amount)*100;
+      payComparison = diff>=0
+        ? `<span style="color:var(--red);">${pct.toFixed(0)}% a mais</span> que a fatura paga anterior`
+        : `<span style="color:var(--green);">${pct.toFixed(0)}% a menos</span> que a fatura paga anterior`;
+    }
     return `
     <div class="chart-card" style="margin-bottom:16px;">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-        <h4>${c.name} <span style="color:var(--text-secondary); font-weight:400;">— vencimento dia ${c.dueDay}</span></h4>
+        <h4>${c.name} <span style="color:var(--text-secondary); font-weight:400;">— fecha dia ${c.closingDay}</span></h4>
         <div style="font-size:13px; display:flex; align-items:center; gap:10px;">
-          <span><span style="color:var(--text-secondary);">Fatura fechada (calculada): </span><b style="color:var(--red);">${fmtBRL(invoice)}</b></span>
+          <span><span style="color:var(--text-secondary);">Fatura atual (em aberto): </span><b style="color:var(--amber);">${fmtBRL(nextInv)}</b></span>
           <button class="btn btn-sm" data-future-invoices="${c.name}">Ver faturas futuras</button>
         </div>
       </div>
       <p style="font-size:11.5px; color:var(--text-secondary); margin:6px 0 10px;">
-        Ponto de partida de ${fmtDate(asOf)}: ${fmtBRL(baseline)}${items.length?` + ${items.length} lançamento(s) em crédito desde então.`:' (nenhum lançamento novo ainda).'}
+        O que já foi lançado em crédito desde o último fechamento — vira a "fatura fechada" assim que o dia ${c.closingDay} passar.
       </p>
-      ${items.length===0 ? `<div class="empty-state">Nenhuma movimentação em crédito lançada para este cartão desde ${fmtDate(asOf)}. Lance em "+ Nova movimentação" com forma de pagamento Crédito, e a fatura atualiza sozinha.</div>` : `
+      ${items.length===0 ? `<div class="empty-state">Nada lançado em crédito ainda nesse ciclo. Lance em "+ Nova movimentação" com forma de pagamento Crédito, e a fatura atualiza sozinha.</div>` : `
       <div class="table-card" style="margin-top:6px;">
         <table>
           <thead><tr><th>Data</th><th>Categoria</th><th>Descrição</th><th>Valor</th></tr></thead>
           <tbody>
-            ${items.map(m=>`<tr><td>${fmtDate(m.date)}</td><td>${m.category}</td><td>${m.description}</td><td style="font-weight:700; color:var(--red);">${fmtBRL(m.amount)}</td></tr>`).join('')}
+            ${items.map(m=>`<tr><td>${fmtDate(m.date)}</td><td>${m.category}</td><td>${m.description}</td><td style="font-weight:700; color:var(--amber);">${fmtBRL(m.amount)}</td></tr>`).join('')}
           </tbody>
         </table>
       </div>`}
+
+      <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">
+        <b style="font-size:12.5px;">Histórico de faturas pagas</b>
+        ${payHistory.length===0 ? `<div style="font-size:12px; color:var(--text-secondary); margin-top:6px;">Nenhum pagamento registrado ainda.</div>` : `
+        <div style="margin-top:8px; display:flex; flex-direction:column; gap:6px;">
+          ${payHistory.slice(0,6).map(p=>`<div style="display:flex; justify-content:space-between; font-size:12.5px;"><span style="color:var(--text-secondary);">${fmtDate(p.date)}</span><b>${fmtBRL(p.amount)}</b></div>`).join('')}
+        </div>
+        ${payComparison ? `<div style="font-size:11.5px; color:var(--text-secondary); margin-top:8px;">Última fatura paga: ${payComparison}.</div>` : ''}
+        `}
+      </div>
     </div>`;
   }).join('');
 
@@ -3170,16 +3195,18 @@ function openCardModal(name){
     const correctingSaldo = !isNaN(newSaldo) && Math.abs(newSaldo-saldoConta)>=0.01;
     const correctingAvail = !isNaN(newAvail) && Math.abs(newAvail-availAtual)>=0.01;
 
-    if(correctingInvoice || correctingNextInvoice || correctingSaldo){
-      freezeAllBaselines(); // preserva o total calculado de tudo antes de mexer em qualquer coisa
+    if(correctingInvoice || correctingNextInvoice){
       if(correctingInvoice){ c.currentInvoice = newInvoice; }
       if(correctingNextInvoice){ c.nextInvoiceBaseline = newNextInvoice; }
-      if(correctingSaldo){
-        DB.accountBalancesAsOf = DB.accountBalancesAsOf || {};
-        DB.accountBalances[c.name] = newSaldo;
-        DB.accountBalancesAsOf[c.name] = todayISO();
-      }
-      finalizeBaselineReset();
+      const {lastClosedCycle} = getCardCycles(c.closingDay);
+      c.invoiceBaselineCycle = lastClosedCycle;
+      resetCardBaseline(c); // só esse cartão "esquece" as movimentações já contadas
+    }
+    if(correctingSaldo){
+      DB.accountBalancesAsOf = DB.accountBalancesAsOf || {};
+      DB.accountBalances[c.name] = newSaldo;
+      DB.accountBalancesAsOf[c.name] = todayISO();
+      resetAccountBaseline(c.name); // só essa conta "esquece" as movimentações já contadas
     }
 
     if(correctingAvail){
@@ -3220,14 +3247,20 @@ function openPayInvoiceModal(name){
     const contaOrigem = document.getElementById('f_payaccount').value;
     if(!data || isNaN(valor) || valor<=0){ showToast('Preencha data e um valor válido.'); return; }
 
-    // 1) congela o total calculado de cada cartão/conta (preserva tudo), aplica o
-    //    novo ponto de partida da fatura já com o pagamento descontado, e "esquece"
-    //    as movimentações já existentes — tudo ANTES de lançar o pagamento em si.
-    freezeAllBaselines();
-    c.currentInvoice = Math.max(0, Math.round((invoiceAtual-valor)*100)/100);
-    finalizeBaselineReset();
+    // 1) antes de mexer em qualquer coisa, congela no histórico ("Faturas anteriores")
+    //    o valor dessa fatura fechada exatamente como está agora — assim ele nunca muda
+    //    depois de paga, seja essa fatura vinda de lançamentos ou de correção manual.
+    const {lastClosedCycle} = getCardCycles(c.closingDay);
+    DB.pastInvoicesManual = DB.pastInvoicesManual || {};
+    DB.pastInvoicesManual[`${c.name}|${lastClosedCycle}`] = invoiceAtual;
 
-    // 2) lança a saída na conta escolhida — o saldo dela é calculado a partir das
+    // 2) aplica o novo ponto de partida da fatura já com o pagamento descontado, e
+    //    "esquece" as movimentações já existentes SÓ desse cartão — outros cartões
+    //    não são afetados. Tudo ANTES de lançar o pagamento em si.
+    c.currentInvoice = Math.max(0, Math.round((invoiceAtual-valor)*100)/100);
+    resetCardBaseline(c);
+
+    // 3) lança a saída na conta escolhida — o saldo dela é calculado a partir das
     //    Movimentações, então essa mesma linha já desconta sozinha, sem precisar mexer em mais nada.
     //    Marcamos como "pagamento de fatura" pra não contar como gasto de novo nos gráficos —
     //    as compras que compõem essa fatura já foram contadas como gasto quando você as lançou.
