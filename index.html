@@ -298,7 +298,7 @@ button{cursor:pointer; border:none; background:none; color:inherit;}
   padding:4px 8px; border-radius:6px; cursor:pointer; white-space:nowrap;
 }
 .chart-period-toggle button.active{background:var(--purple); color:#fff;}
-.chart-card .chart-holder{position:relative; height:290px;}
+.chart-card .chart-holder{position:relative; height:320px;}
 .chart-card .chart-holder.small{height:270px;}
 
 /* TABLES */
@@ -715,85 +715,83 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
       </div>
       <div class="kpi-grid" id="kpiMain"></div>
 
-      <div class="dashboard-grid">
-        <div class="dash-main">
-          <div class="section-title">
-            <div><h2>Central dos Cartões</h2><div class="sub">Visão completa de cada cartão de crédito</div></div>
-          </div>
-          <div class="cards-central">
-            <div class="cc-header">
-              <h3>CENTRAL DOS CARTÕES</h3>
-              <div class="cc-summary" id="ccSummary"></div>
-            </div>
-            <div class="cc-bar-list" id="ccGrid"></div>
-          </div>
-
-          <div class="section-title"><div><h2>Análises</h2><div class="sub">Receitas, despesas e categorias — clique numa categoria pra ver o detalhe</div></div></div>
-          <div id="filtersSlotAnalises" style="margin-bottom:16px;"></div>
-          <div class="charts-grid-3">
-            <div class="chart-card">
-              <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                <div><h4>Receitas x Despesas</h4><div class="sub" style="font-size:11.5px; color:var(--text-secondary); margin-top:2px;" id="rxdPeriodLabel">Últimos 6 meses</div></div>
-                <div class="chart-period-toggle" id="rxdPeriodToggle">
-                  <button data-period="month">Este mês</button>
-                  <button data-period="6m" class="active">6 meses</button>
-                </div>
-              </div>
-              <div class="chart-holder small"><canvas id="chartRxD"></canvas></div>
-              <div class="chart-insight" id="insightRxD"></div>
-            </div>
-            <div class="chart-card">
-              <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                <div><h4>Gastos por categoria</h4><div class="sub" style="font-size:11.5px; color:var(--text-secondary); margin-top:2px;" id="catPeriodLabel">Este mês</div></div>
-                <div class="chart-period-toggle" id="catPeriodToggle">
-                  <button data-period="month" class="active">Este mês</button>
-                  <button data-period="6m">6 meses</button>
-                </div>
-              </div>
-              <div class="chart-holder small"><canvas id="chartCat"></canvas></div>
-              <div class="chart-insight" id="insightCat"></div>
-              <div id="categoryDrilldown"></div>
-            </div>
-            <div class="chart-card">
-              <h4>Evolução das reservas</h4><div class="sub" style="font-size:11.5px; color:var(--text-secondary); margin-top:-6px;">Últimos 6 meses</div>
-              <div class="chart-holder small"><canvas id="chartReserves"></canvas></div>
-              <div class="chart-insight" id="insightReserves"></div>
-            </div>
-          </div>
-          <div class="charts-grid" style="margin-top:16px;">
-            <div class="chart-card">
-              <h4>Faturas fechadas por mês</h4><div class="sub" style="font-size:11.5px; color:var(--text-secondary); margin-top:2px;">Últimos 6 meses, por cartão</div>
-              <div class="chart-holder small"><canvas id="chartInvoices"></canvas></div>
-              <div class="chart-insight" id="insightInvoices"></div>
-            </div>
-            <div class="chart-card">
-              <h4>Este mês x mês passado x média</h4><div class="sub" style="font-size:11.5px; color:var(--text-secondary); margin-top:2px;">Só despesas</div>
-              <div class="chart-holder small"><canvas id="chartComparison"></canvas></div>
-              <div class="chart-insight" id="insightComparison"></div>
-            </div>
-          </div>
-
-          <div class="chart-card" style="margin-top:16px;">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-              <div><h4>Gastos por dia</h4><div class="sub" style="font-size:11.5px; color:var(--text-secondary); margin-top:2px;">Últimos 30 dias</div></div>
-            </div>
-            <div class="chart-holder" style="height:340px; margin-top:10px;"><canvas id="chartDaily"></canvas></div>
-            <div class="chart-insight" id="insightDaily"></div>
-          </div>
-
-          <div class="charts-grid" style="margin-top:16px;">
-            <div class="chart-card"><h4>Próximos vencimentos</h4><div id="upcomingList"></div></div>
-            <div class="chart-card"><h4>Últimas movimentações</h4><div id="recentMovList"></div></div>
-          </div>
-
-          <div class="section-title"><div><h2>Alertas automáticos</h2><div class="sub">Fique de olho nesses pontos</div></div></div>
-          <div class="alerts-panel" id="alertsPanel"></div>
-        </div>
-
-        <aside class="dash-side">
-          <div id="dashSidePanel"></div>
-        </aside>
+      <div class="section-title">
+        <div><h2>Central dos Cartões</h2><div class="sub">Visão completa de cada cartão de crédito</div></div>
       </div>
+      <div class="cards-central">
+        <div class="cc-header">
+          <h3>CENTRAL DOS CARTÕES</h3>
+          <div class="cc-summary" id="ccSummary"></div>
+        </div>
+        <div class="cc-bar-list" id="ccGrid"></div>
+      </div>
+
+      <div class="section-title"><div><h2>Análises</h2><div class="sub">Receitas, despesas e categorias — clique numa categoria pra ver o detalhe</div></div></div>
+      <div id="filtersSlotAnalises" style="margin-bottom:16px;"></div>
+      <div class="charts-grid">
+        <div class="chart-card">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+            <div><h4>Receitas x Despesas</h4><div class="sub" style="font-size:11.5px; color:var(--text-secondary); margin-top:2px;" id="rxdPeriodLabel">Últimos 6 meses</div></div>
+            <div class="chart-period-toggle" id="rxdPeriodToggle">
+              <button data-period="month">Este mês</button>
+              <button data-period="6m" class="active">6 meses</button>
+            </div>
+          </div>
+          <div class="chart-holder"><canvas id="chartRxD"></canvas></div>
+          <div class="chart-insight" id="insightRxD"></div>
+        </div>
+        <div class="chart-card">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+            <div><h4>Gastos por categoria</h4><div class="sub" style="font-size:11.5px; color:var(--text-secondary); margin-top:2px;" id="catPeriodLabel">Este mês</div></div>
+            <div class="chart-period-toggle" id="catPeriodToggle">
+              <button data-period="month" class="active">Este mês</button>
+              <button data-period="6m">6 meses</button>
+            </div>
+          </div>
+          <div class="chart-holder"><canvas id="chartCat"></canvas></div>
+          <div class="chart-insight" id="insightCat"></div>
+          <div id="categoryDrilldown"></div>
+        </div>
+      </div>
+      <div class="charts-grid" style="margin-top:16px;">
+        <div class="chart-card">
+          <h4>Evolução das reservas</h4><div class="sub" style="font-size:11.5px; color:var(--text-secondary); margin-top:-6px;">Últimos 6 meses</div>
+          <div class="chart-holder"><canvas id="chartReserves"></canvas></div>
+          <div class="chart-insight" id="insightReserves"></div>
+        </div>
+        <div class="chart-card">
+          <h4>Faturas fechadas por mês</h4><div class="sub" style="font-size:11.5px; color:var(--text-secondary); margin-top:2px;">Últimos 6 meses, por cartão</div>
+          <div class="chart-holder"><canvas id="chartInvoices"></canvas></div>
+          <div class="chart-insight" id="insightInvoices"></div>
+        </div>
+      </div>
+      <div class="charts-grid" style="margin-top:16px;">
+        <div class="chart-card">
+          <h4>Este mês x mês passado x média</h4><div class="sub" style="font-size:11.5px; color:var(--text-secondary); margin-top:2px;">Só despesas</div>
+          <div class="chart-holder"><canvas id="chartComparison"></canvas></div>
+          <div class="chart-insight" id="insightComparison"></div>
+        </div>
+        <div class="chart-card">
+          <h4>Metas em andamento</h4><div class="sub" style="font-size:11.5px; color:var(--text-secondary); margin-top:-6px;">Progresso das suas metas de economia</div>
+          <div id="goalsWidget" style="margin-top:12px;"></div>
+        </div>
+      </div>
+
+      <div class="chart-card" style="margin-top:16px;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+          <div><h4>Gastos por dia</h4><div class="sub" style="font-size:11.5px; color:var(--text-secondary); margin-top:2px;">Últimos 30 dias</div></div>
+        </div>
+        <div class="chart-holder" style="height:380px; margin-top:10px;"><canvas id="chartDaily"></canvas></div>
+        <div class="chart-insight" id="insightDaily"></div>
+      </div>
+
+      <div class="charts-grid" style="margin-top:16px;">
+        <div class="chart-card"><h4>Próximos vencimentos</h4><div id="upcomingList"></div></div>
+        <div class="chart-card"><h4>Últimas movimentações</h4><div id="recentMovList"></div></div>
+      </div>
+
+      <div class="section-title"><div><h2>Alertas automáticos</h2><div class="sub">Fique de olho nesses pontos</div></div></div>
+      <div class="alerts-panel" id="alertsPanel"></div>
     </section>
 
     <!-- ================= MOVIMENTAÇÕES ================= -->
@@ -1782,50 +1780,28 @@ function renderRecentMovList(){
 }
 
 function renderDashSidePanel(){
-  const panel = document.getElementById('dashSidePanel');
-  if(!panel) return;
-
-  const streakDays = [];
-  const todayD = new Date();
-  for(let i=29; i>=0; i--){
-    const d = new Date(todayD.getFullYear(), todayD.getMonth(), todayD.getDate()-i);
-    const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-    const count = DB.movements.filter(m=>m.date===dateStr).length;
-    streakDays.push({dateStr, count});
-  }
-  const activeDays = streakDays.filter(d=>d.count>0).length;
+  const widget = document.getElementById('goalsWidget');
+  if(!widget) return;
 
   migrateSavingsGoals();
   const goals = DB.savingsGoals || [];
   const reservesForGoals = reservesTotals();
 
-  panel.innerHTML = `
-    <div class="side-panel-card">
-      <h4>Metas em andamento</h4>
-      ${goals.length===0 ? `<div style="font-size:12px; color:var(--text-dim);">Nenhuma meta criada ainda — dá uma olhada na aba Metas.</div>` :
-        goals.slice(0,3).map(g=>{
-          const isLinked = g.linkedReserve && g.linkedReserve !== '';
-          const current = isLinked
-            ? (g.linkedReserve==='total' ? reservesForGoals.total : (reservesForGoals.byInst[g.linkedReserve]||0))
-            : (Number(g.current)||0);
-          const pct = clamp((current/g.target)*100, 0, 100);
-          return `
-          <div style="margin-bottom:10px;">
-            <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
-              <span>${g.name||'Meta'}</span><span style="color:var(--text-secondary);">${pct.toFixed(0)}%</span>
-            </div>
-            <div class="budget-bar" style="height:7px;"><span style="width:${pct}%; background:linear-gradient(90deg, var(--purple), var(--green));"></span></div>
-          </div>`;
-        }).join('')}
-    </div>
-    <div class="side-panel-card">
-      <h4>Constância — últimos 30 dias</h4>
-      <div class="streak-grid">
-        ${streakDays.map(d=>`<span class="streak-cell ${d.count>0?'active':''}" title="${fmtDate(d.dateStr)}${d.count>0?' — '+d.count+' lançamento(s)':''}"></span>`).join('')}
-      </div>
-      <div style="font-size:11px; color:var(--text-dim); margin-top:8px;">${activeDays} de 30 dias com lançamento</div>
-    </div>
-  `;
+  widget.innerHTML = goals.length===0 ? `<div style="font-size:12px; color:var(--text-dim);">Nenhuma meta criada ainda — dá uma olhada na aba Metas.</div>` :
+    goals.map(g=>{
+      const isLinked = g.linkedReserve && g.linkedReserve !== '';
+      const current = isLinked
+        ? (g.linkedReserve==='total' ? reservesForGoals.total : (reservesForGoals.byInst[g.linkedReserve]||0))
+        : (Number(g.current)||0);
+      const pct = clamp((current/g.target)*100, 0, 100);
+      return `
+      <div style="margin-bottom:12px;">
+        <div style="display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:4px;">
+          <span>${g.name||'Meta'}</span><span style="color:var(--text-secondary);">${fmtBRL(current)} de ${fmtBRL(g.target)} (${pct.toFixed(0)}%)</span>
+        </div>
+        <div class="budget-bar" style="height:8px;"><span style="width:${pct}%; background:linear-gradient(90deg, var(--purple), var(--green));"></span></div>
+      </div>`;
+    }).join('');
 }
 
 function animateCountUp(el, target, isCurrency){
