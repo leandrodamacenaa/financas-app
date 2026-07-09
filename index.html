@@ -2144,13 +2144,25 @@ function openPastInvoiceEditModal(key){
 
 function renderInvoicesView(){
   const container = document.getElementById('invoicesContainer');
+  const comp = currentCompetencia();
   container.innerHTML = DB.cards.map(c=>{
-    const excluded = c.excludedMovementIds || [];
     const {openCycle} = getCardCycles(c.closingDay);
-    const items = DB.movements
-      .filter(m=>m.account===c.name && m.paymentMethod==='Crédito' && m.type==='despesa' && !excluded.includes(m.id)
+    // Mostra TODOS os lançamentos em crédito desse ciclo, sem esconder nada — mesmo que
+    // o valor total já tenha sido corrigido manualmente em algum momento, o extrato
+    // continua completo, pra você sempre ver o que compõe a fatura.
+    const realItems = DB.movements
+      .filter(m=>m.account===c.name && m.paymentMethod==='Crédito' && m.type==='despesa'
         && getInvoiceCycle(m.date, c.closingDay) === openCycle)
-      .sort((a,b)=>b.date.localeCompare(a.date));
+      .map(m=>({name:m.description, category:m.category, date:m.date, value:Number(m.amount), real:true}));
+    // Parcelas ativas desse cartão que ainda vão entrar nesse ciclo, mas ainda não
+    // viraram lançamento (o dia de cobrança ainda não chegou este mês).
+    const forecastItems = (DB.installments||[]).filter(i=>i.card===c.name && Number(i.remainingInstallments)>0).filter(i=>{
+      const jaLancado = DB.movements.some(m=>m.installmentId===i.id && m.competencia===comp);
+      return !jaLancado;
+    }).map(i=>({name:`${i.purchase} (parcela)`, category:i.category, date:null, value:Number(i.installmentValue), real:false}));
+    const items = [...realItems, ...forecastItems.filter(fi=>!realItems.some(ri=>ri.name.startsWith(fi.name.split(' (parcela)')[0])))]
+      .sort((a,b)=> (a.date||'9999').localeCompare(b.date||'9999'));
+    const total = items.reduce((s,it)=>s+it.value,0);
     const nextInv = getComputedNextInvoice(c);
     const payHistory = getInvoicePaymentHistory(c.name);
     let payComparison = '';
@@ -2171,14 +2183,15 @@ function renderInvoicesView(){
         </div>
       </div>
       <p style="font-size:11.5px; color:var(--text-secondary); margin:6px 0 10px;">
-        O que já foi lançado em crédito desde o último fechamento — vira a "fatura fechada" assim que o dia ${c.closingDay} passar.
+        Tudo que compõe essa fatura até agora — vira a "fatura fechada" assim que o dia ${c.closingDay} passar.
+        ${Math.abs(total-nextInv)>=0.02 ? ` O extrato soma ${fmtBRL(total)} porque já inclui parcelas previstas que ainda não chegaram na data de cobrança — o valor "em aberto" oficial (${fmtBRL(nextInv)}) só conta o que já é lançamento de verdade.` : ''}
       </p>
-      ${items.length===0 ? `<div class="empty-state">Nada lançado em crédito ainda nesse ciclo. Lance em "+ Nova movimentação" com forma de pagamento Crédito, e a fatura atualiza sozinha.</div>` : `
+      ${items.length===0 ? `<div class="empty-state">Nada compondo essa fatura ainda. Lance em "+ Nova movimentação" com forma de pagamento Crédito, e a fatura atualiza sozinha.</div>` : `
       <div class="table-card" style="margin-top:6px;">
         <table>
           <thead><tr><th>Data</th><th>Categoria</th><th>Descrição</th><th>Valor</th></tr></thead>
           <tbody>
-            ${items.map(m=>`<tr><td>${fmtDate(m.date)}</td><td>${m.category}</td><td>${m.description}</td><td style="font-weight:700; color:var(--amber);">${fmtBRL(m.amount)}</td></tr>`).join('')}
+            ${items.map(it=>`<tr><td>${it.date?fmtDate(it.date):'<span style="color:var(--text-secondary);">previsto</span>'}</td><td>${it.category}</td><td>${it.name}</td><td style="font-weight:700; color:${it.real?'var(--amber)':'var(--text-secondary)'};">${fmtBRL(it.value)}</td></tr>`).join('')}
           </tbody>
         </table>
       </div>`}
