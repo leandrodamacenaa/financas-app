@@ -293,6 +293,12 @@ button{cursor:pointer; border:none; background:none; color:inherit;}
 .chart-card h4{font-size:13.5px; font-weight:700;}
 .chart-insight{font-size:12.5px; color:var(--text-secondary); line-height:1.5; margin-top:8px; padding-top:8px; border-top:1px solid var(--border);}
 .chart-insight b{color:var(--text);}
+.chart-period-toggle{display:flex; gap:2px; background:rgba(255,255,255,0.05); border-radius:8px; padding:2px; flex-shrink:0;}
+.chart-period-toggle button{
+  border:none; background:transparent; color:var(--text-secondary); font-size:10.5px; font-weight:600;
+  padding:4px 8px; border-radius:6px; cursor:pointer; white-space:nowrap;
+}
+.chart-period-toggle button.active{background:var(--purple); color:#fff;}
 .chart-card .chart-holder{position:relative; height:290px;}
 .chart-card .chart-holder.small{height:270px;}
 
@@ -722,12 +728,24 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
           <div id="filtersSlotAnalises" style="margin-bottom:16px;"></div>
           <div class="charts-grid-3">
             <div class="chart-card">
-              <h4>Receitas x Despesas</h4><div class="sub" style="font-size:11.5px; color:var(--text-secondary); margin-top:-6px;">Últimos 6 meses</div>
+              <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                <div><h4>Receitas x Despesas</h4><div class="sub" style="font-size:11.5px; color:var(--text-secondary); margin-top:2px;" id="rxdPeriodLabel">Últimos 6 meses</div></div>
+                <div class="chart-period-toggle" id="rxdPeriodToggle">
+                  <button data-period="month">Este mês</button>
+                  <button data-period="6m" class="active">6 meses</button>
+                </div>
+              </div>
               <div class="chart-holder small"><canvas id="chartRxD"></canvas></div>
               <div class="chart-insight" id="insightRxD"></div>
             </div>
             <div class="chart-card">
-              <h4>Gastos por categoria</h4><div class="sub" style="font-size:11.5px; color:var(--text-secondary); margin-top:-6px;">Este mês</div>
+              <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                <div><h4>Gastos por categoria</h4><div class="sub" style="font-size:11.5px; color:var(--text-secondary); margin-top:2px;" id="catPeriodLabel">Este mês</div></div>
+                <div class="chart-period-toggle" id="catPeriodToggle">
+                  <button data-period="month" class="active">Este mês</button>
+                  <button data-period="6m">6 meses</button>
+                </div>
+              </div>
               <div class="chart-holder small"><canvas id="chartCat"></canvas></div>
               <div class="chart-insight" id="insightCat"></div>
               <div id="categoryDrilldown"></div>
@@ -739,9 +757,13 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
             </div>
           </div>
           <div class="charts-grid" style="margin-top:16px;">
-            <div class="chart-card"><h4>Faturas por cartão</h4><div class="chart-holder small"><canvas id="chartInvoices"></canvas></div></div>
             <div class="chart-card">
-              <h4>Este mês x média (6m)</h4>
+              <h4>Faturas fechadas por mês</h4><div class="sub" style="font-size:11.5px; color:var(--text-secondary); margin-top:2px;">Últimos 6 meses, por cartão</div>
+              <div class="chart-holder small"><canvas id="chartInvoices"></canvas></div>
+              <div class="chart-insight" id="insightInvoices"></div>
+            </div>
+            <div class="chart-card">
+              <h4>Este mês x mês passado x média</h4><div class="sub" style="font-size:11.5px; color:var(--text-secondary); margin-top:2px;">Só despesas</div>
               <div class="chart-holder small"><canvas id="chartComparison"></canvas></div>
               <div class="chart-insight" id="insightComparison"></div>
             </div>
@@ -865,6 +887,11 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
         <div><h2>Faturas por cartão</h2><div class="sub">O que compõe a fatura de cada cartão, com base nas suas movimentações em crédito</div></div>
       </div>
       <div id="invoicesContainer"></div>
+
+      <div class="section-title">
+        <div><h2>Faturas anteriores</h2><div class="sub">Valor de cada fatura já paga, por cartão</div></div>
+      </div>
+      <div id="invoiceHistoryContainer"></div>
     </section>
 
     <!-- ================= PARCELAMENTOS ================= -->
@@ -1331,7 +1358,7 @@ function nextCompetencia(comp){
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
 }
 function sumByTypeComp(comp, type){
-  return DB.movements.filter(m=>m.competencia===comp && m.type===type).reduce((s,m)=>s+Number(m.amount),0);
+  return DB.movements.filter(m=>m.competencia===comp && m.type===type && !m.isInvoicePayment).reduce((s,m)=>s+Number(m.amount),0);
 }
 function last12Competencias(){
   const arr = [];
@@ -1473,6 +1500,12 @@ function migrateBaselines(){
       // do app antes da distinção entre fechada/aberta existir).
       const {lastClosedCycle} = getCardCycles(c.closingDay);
       c.invoiceBaselineCycle = lastClosedCycle;
+      changed = true;
+    }
+  });
+  DB.movements.forEach(m=>{
+    if(m.category==='Financeiro' && m.paymentMethod==='Transferência' && m.description && m.description.startsWith('Pagamento fatura ') && m.isInvoicePayment===undefined){
+      m.isInvoicePayment = true;
       changed = true;
     }
   });
@@ -1984,10 +2017,59 @@ function renderCardsCentral(){
   `;
 }
 
+function getPastInvoicesByCard(cardName, monthsBack){
+  const c = DB.cards.find(x=>x.name===cardName);
+  if(!c) return [];
+  const {lastClosedCycle} = getCardCycles(c.closingDay);
+  const excluded = DB.baselineExcludedIds || [];
+  const result = [];
+  const [ly, lm] = lastClosedCycle.split('-').map(Number);
+  for(let k=0; k<monthsBack; k++){
+    const d = new Date(ly, lm-1-k, 1); // lastClosedCycle é o mês 0, cada k volta 1 mês
+    const cycleLabel = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    let total = DB.movements
+      .filter(m=>m.account===cardName && m.paymentMethod==='Crédito' && m.type==='despesa' && !excluded.includes(m.id)
+        && getInvoiceCycle(m.date, c.closingDay) === cycleLabel)
+      .reduce((s,m)=>s+Number(m.amount), 0);
+    let isEstimate = false;
+    if(k===0 && total===0 && Number(c.currentInvoice)>0 && (c.invoiceBaselineCycle||cycleLabel)===cycleLabel){
+      // a fatura mais recente pode estar só na baseline (correção manual), sem lançamentos detalhados
+      total = Number(c.currentInvoice);
+      isEstimate = true;
+    }
+    result.push({cycle:cycleLabel, label:`${MONTH_NAMES_FULL[d.getMonth()]} de ${d.getFullYear()}`, total, isEstimate});
+  }
+  return result;
+}
+
 function getInvoicePaymentHistory(cardName){
   return DB.movements
     .filter(m=>m.category==='Financeiro' && m.paymentMethod==='Transferência' && m.description===`Pagamento fatura ${cardName}`)
     .sort((a,b)=>b.date.localeCompare(a.date));
+}
+
+function renderInvoiceHistoryView(){
+  const container = document.getElementById('invoiceHistoryContainer');
+  if(!container) return;
+  container.innerHTML = `<div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px;">${DB.cards.map(c=>{
+    const past = getPastInvoicesByCard(c.name, 6);
+    const maxVal = Math.max(1, ...past.map(p=>p.total));
+    return `
+    <div class="chart-card">
+      <h4 style="display:flex; align-items:center; gap:8px;">${cardIconBadge(c.name,22)}${c.name}</h4>
+      <div style="display:flex; flex-direction:column; gap:8px; margin-top:10px;">
+        ${past.map(p=>`
+          <div>
+            <div style="display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:3px;">
+              <span style="color:var(--text-secondary);">${p.label}${p.isEstimate?' *':''}</span>
+              <b>${fmtBRL(p.total)}</b>
+            </div>
+            <div class="budget-bar" style="height:6px;"><span style="width:${(p.total/maxVal)*100}%; background:${CARD_COLORS[c.name]||'var(--purple)'};"></span></div>
+          </div>`).join('')}
+      </div>
+      ${past.some(p=>p.isEstimate) ? `<p style="font-size:10.5px; color:var(--text-secondary); margin-top:10px;">* fatura corrigida manualmente, sem lançamentos detalhados nesse ciclo.</p>` : ''}
+    </div>`;
+  }).join('')}</div>`;
 }
 
 function renderInvoicesView(){
@@ -1998,15 +2080,6 @@ function renderInvoicesView(){
     const items = DB.movements.filter(m=>m.account===c.name && m.paymentMethod==='Crédito' && m.type==='despesa' && !excluded.includes(m.id)).sort((a,b)=>b.date.localeCompare(a.date));
     const invoice = getComputedInvoice(c);
     const baseline = Number(c.currentInvoice)||0;
-    const payHistory = getInvoicePaymentHistory(c.name);
-    let payComparison = '';
-    if(payHistory.length>=2){
-      const diff = Number(payHistory[0].amount) - Number(payHistory[1].amount);
-      const pct = Math.abs(diff)/Number(payHistory[1].amount)*100;
-      payComparison = diff>=0
-        ? `<span style="color:var(--red);">${pct.toFixed(0)}% a mais</span> que a fatura paga anterior`
-        : `<span style="color:var(--green);">${pct.toFixed(0)}% a menos</span> que a fatura paga anterior`;
-    }
     return `
     <div class="chart-card" style="margin-bottom:16px;">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
@@ -2028,16 +2101,6 @@ function renderInvoicesView(){
           </tbody>
         </table>
       </div>`}
-
-      <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">
-        <b style="font-size:12.5px;">Histórico de faturas pagas</b>
-        ${payHistory.length===0 ? `<div style="font-size:12px; color:var(--text-secondary); margin-top:6px;">Nenhum pagamento registrado ainda.</div>` : `
-        <div style="margin-top:8px; display:flex; flex-direction:column; gap:6px;">
-          ${payHistory.slice(0,6).map(p=>`<div style="display:flex; justify-content:space-between; font-size:12.5px;"><span style="color:var(--text-secondary);">${fmtDate(p.date)}</span><b>${fmtBRL(p.amount)}</b></div>`).join('')}
-        </div>
-        ${payComparison ? `<div style="font-size:11.5px; color:var(--text-secondary); margin-top:8px;">Última fatura paga: ${payComparison}.</div>` : ''}
-        `}
-      </div>
     </div>`;
   }).join('');
 
@@ -2147,13 +2210,43 @@ function chartDefaults(){
   Chart.defaults.font.size = 11;
 }
 
+let RXD_PERIOD = '6m';
 function renderChartRxD(){
   destroyChart('rxd');
+  const ctx = document.getElementById('chartRxD');
+
+  if(RXD_PERIOD === 'month'){
+    const comp = currentCompetencia();
+    const receita = sumByTypeComp(comp,'receita');
+    const despesa = sumByTypeComp(comp,'despesa');
+    charts.rxd = new Chart(ctx, {
+      type:'bar',
+      data:{labels:['Receita','Despesa'], datasets:[{data:[receita,despesa], backgroundColor:['#2be08a','#9b6bff'], borderRadius:6}]},
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{legend:{display:false}, tooltip:{callbacks:{label:(c)=>fmtBRL(c.raw)}}},
+        scales:{x:{grid:{display:false}}, y:{grid:{color:'rgba(255,255,255,0.05)'}, ticks:{callback:(v)=>'R$ '+v}}}
+      }
+    });
+    const insightEl = document.getElementById('insightRxD');
+    if(insightEl){
+      if(despesa===0 && receita===0){
+        insightEl.textContent = 'Ainda não há dados esse mês.';
+      } else {
+        const diff = receita - despesa;
+        const pct = despesa>0 ? Math.abs((diff/despesa)*100) : 100;
+        insightEl.innerHTML = diff>=0
+          ? `Sua receita está <b style="color:var(--green);">${pct.toFixed(0)}% acima</b> da despesa esse mês.`
+          : `Sua despesa está <b style="color:var(--red);">${pct.toFixed(0)}% acima</b> da receita esse mês.`;
+      }
+    }
+    return;
+  }
+
   const comps = last12Competencias().slice(-6);
   const receitas = comps.map(c=>sumByTypeComp(c,'receita'));
   const despesas = comps.map(c=>sumByTypeComp(c,'despesa'));
   const labels = comps.map(c=>MONTH_NAMES[Number(c.slice(5,7))-1]+'/'+c.slice(2,4));
-  const ctx = document.getElementById('chartRxD');
   const gradG = ctx.getContext('2d').createLinearGradient(0,0,0,240);
   gradG.addColorStop(0,'rgba(43,224,138,0.35)'); gradG.addColorStop(1,'rgba(43,224,138,0)');
   const gradR = ctx.getContext('2d').createLinearGradient(0,0,0,240);
@@ -2191,22 +2284,28 @@ function renderChartRxD(){
   }
 }
 
+let CAT_PERIOD = 'month';
 function renderChartCat(){
   destroyChart('cat');
-  const movs = filteredMovements().length ? filteredMovements() : DB.movements;
-  const despesas = movs.filter(m=>m.type==='despesa');
+  let despesas;
+  if(CAT_PERIOD === 'month'){
+    const movs = filteredMovements().length ? filteredMovements() : DB.movements;
+    despesas = movs.filter(m=>m.type==='despesa' && !m.isInvoicePayment);
+  } else {
+    const comps = last12Competencias().slice(-6);
+    despesas = DB.movements.filter(m=>m.type==='despesa' && !m.isInvoicePayment && comps.includes(m.competencia));
+  }
   const byCat = {};
   despesas.forEach(m=> byCat[m.category] = (byCat[m.category]||0) + Number(m.amount));
-  const entries = Object.entries(byCat).sort((a,b)=>a[1]-b[1]); // crescente, pra maior barra ficar no topo (Chart.js horizontal)
+  const entries = Object.entries(byCat).sort((a,b)=>b[1]-a[1]); // decrescente, maior fatia primeiro
   const total = entries.reduce((s,[,v])=>s+v,0) || 1;
   const palette = ['#9b6bff','#2be08a','#ff5d7a','#ffb84d','#5ac8fa','#f472b6','#facc15','#34d399','#818cf8','#fb923c','#94a3b8'];
   const ctx = document.getElementById('chartCat');
   charts.cat = new Chart(ctx, {
-    type:'bar',
-    data:{labels:entries.map(e=>e[0]), datasets:[{data:entries.map(e=>e[1]), backgroundColor:entries.map((_,i)=>palette[i%palette.length]), borderRadius:6, barThickness:16}]},
+    type:'doughnut',
+    data:{labels:entries.map(e=>e[0]), datasets:[{data:entries.map(e=>e[1]), backgroundColor:entries.map((_,i)=>palette[i%palette.length]), borderColor:'#171820', borderWidth:3}]},
     options:{
-      indexAxis:'y',
-      responsive:true, maintainAspectRatio:false,
+      responsive:true, maintainAspectRatio:false, cutout:'62%',
       onClick:(evt, elements)=>{
         if(elements.length===0) return;
         const idx = elements[0].index;
@@ -2215,12 +2314,8 @@ function renderChartCat(){
       },
       onHover:(evt, elements)=>{ evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; },
       plugins:{
-        legend:{display:false},
-        tooltip:{callbacks:{label:(c)=>{ const v=c.raw; const pct=((v/total)*100).toFixed(1); return `${fmtBRL(v)} (${pct}%) — clique pra ver os lançamentos`; }}}
-      },
-      scales:{
-        x:{grid:{color:'rgba(255,255,255,0.05)'}, ticks:{callback:(v)=>'R$ '+v}},
-        y:{grid:{display:false}, ticks:{font:{size:11}}}
+        legend:{position:'right', labels:{boxWidth:9, boxHeight:9, usePointStyle:true, font:{size:10.5}}},
+        tooltip:{callbacks:{label:(c)=>{ const v=c.raw; const pct=((v/total)*100).toFixed(1); return `${c.label}: ${fmtBRL(v)} (${pct}%)`; }}}
       }
     }
   });
@@ -2231,9 +2326,9 @@ function renderChartCat(){
   const insightEl = document.getElementById('insightCat');
   if(insightEl){
     if(entries.length===0){
-      insightEl.textContent = 'Nenhum gasto lançado ainda esse mês.';
+      insightEl.textContent = 'Nenhum gasto lançado ainda nesse período.';
     } else {
-      const top = entries[entries.length-1]; // maior valor (array está em ordem crescente)
+      const top = entries[0]; // maior valor (array está em ordem decrescente)
       const pct = (top[1]/total)*100;
       insightEl.innerHTML = `<b>${top[0]}</b> foi sua maior categoria de gasto, representando <b>${pct.toFixed(0)}%</b> do total.`;
     }
@@ -2242,53 +2337,65 @@ function renderChartCat(){
 
 function renderChartInvoices(){
   destroyChart('inv');
+  const monthsBack = 6;
+  const perCard = DB.cards.map(c=>getPastInvoicesByCard(c.name, monthsBack).reverse()); // do mais antigo pro mais recente
+  const labels = perCard[0] ? perCard[0].map(p=>p.label.split(' de ')[0].slice(0,3)) : [];
+  const colors = DB.cards.map(c=>CARD_COLORS[c.name]||'#9b6bff');
   const ctx = document.getElementById('chartInvoices');
   charts.inv = new Chart(ctx, {
     type:'bar',
-    data:{labels:DB.cards.map(c=>c.name), datasets:[
-      {label:'Fatura fechada', data:DB.cards.map(c=>getComputedInvoice(c)), backgroundColor:'#ff5d7a', borderRadius:6},
-      {label:'Fatura atual (aberto)', data:DB.cards.map(c=>getComputedNextInvoice(c)), backgroundColor:'#ffb84d', borderRadius:6},
-    ]},
+    data:{labels, datasets:DB.cards.map((c,i)=>({
+      label:c.name, data:perCard[i].map(p=>p.total), backgroundColor:colors[i], borderRadius:5,
+    }))},
     options:{
       responsive:true, maintainAspectRatio:false,
-      plugins:{legend:{position:'top', align:'end', labels:{boxWidth:10, boxHeight:10, usePointStyle:true}},
+      plugins:{legend:{position:'top', align:'end', labels:{boxWidth:9, boxHeight:9, usePointStyle:true, font:{size:10}}},
         tooltip:{callbacks:{label:(c)=> c.dataset.label+': '+fmtBRL(c.raw)}}},
-      scales:{x:{grid:{display:false}}, y:{grid:{color:'rgba(255,255,255,0.05)'}, ticks:{callback:(v)=>'R$ '+v}}}
+      scales:{
+        x:{grid:{display:false}, stacked:false},
+        y:{grid:{color:'rgba(255,255,255,0.05)'}, ticks:{callback:(v)=>'R$ '+v}}
+      }
     }
   });
+
+  const insightEl = document.getElementById('insightInvoices');
+  if(insightEl){
+    const totalsLastMonth = DB.cards.map((c,i)=>perCard[i][perCard[i].length-1]?.total||0);
+    const grandTotal = totalsLastMonth.reduce((s,v)=>s+v,0);
+    if(grandTotal===0){
+      insightEl.textContent = 'Ainda não há faturas fechadas registradas nos últimos meses.';
+    } else {
+      const maxIdx = totalsLastMonth.indexOf(Math.max(...totalsLastMonth));
+      insightEl.innerHTML = `No último mês fechado, o total das faturas foi de <b>${fmtBRL(grandTotal)}</b> — <b>${DB.cards[maxIdx].name}</b> foi o cartão mais usado.`;
+    }
+  }
 }
 
 function renderChartComparison(){
   destroyChart('comparison');
   const comps = last12Competencias();
   const current = comps[comps.length-1];
+  const prevComp = prevCompetencia(current);
   const prev6 = comps.slice(-7, -1); // 6 meses antes do atual
-  const avgReceita = prev6.reduce((s,c)=>s+sumByTypeComp(c,'receita'),0) / (prev6.length||1);
   const avgDespesa = prev6.reduce((s,c)=>s+sumByTypeComp(c,'despesa'),0) / (prev6.length||1);
-  const curReceita = sumByTypeComp(current,'receita');
   const curDespesa = sumByTypeComp(current,'despesa');
+  const prevDespesa = sumByTypeComp(prevComp,'despesa');
 
   charts.comparison = new Chart(document.getElementById('chartComparison'), {
     type:'bar',
     data:{
-      labels:['Receita','Despesa'],
-      datasets:[
-        {label:'Este mês', data:[curReceita, curDespesa], backgroundColor:['#2be08a','#ff5d7a'], borderRadius:6},
-        {label:'Média 6 meses', data:[avgReceita, avgDespesa], backgroundColor:['rgba(43,224,138,0.35)','rgba(255,93,122,0.35)'], borderRadius:6},
-      ]
+      labels:['Este mês\n(até agora)','Mês passado','Média\n6 meses'],
+      datasets:[{data:[curDespesa, prevDespesa, avgDespesa], backgroundColor:['#ff5d7a','rgba(255,93,122,0.5)','rgba(255,93,122,0.25)'], borderRadius:6}]
     },
     options:{
       responsive:true, maintainAspectRatio:false,
-      plugins:{legend:{position:'top', align:'end', labels:{boxWidth:10, boxHeight:10, usePointStyle:true}},
-        tooltip:{callbacks:{label:(c)=> c.dataset.label+': '+fmtBRL(c.raw)}}},
+      plugins:{legend:{display:false}, tooltip:{callbacks:{label:(c)=>fmtBRL(c.raw)}}},
       scales:{x:{grid:{display:false}}, y:{grid:{color:'rgba(255,255,255,0.05)'}, ticks:{callback:(v)=>'R$ '+v}}}
     }
   });
 
   const insightEl = document.getElementById('insightComparison');
   if(insightEl){
-    const prevComp = prevCompetencia(current);
-    const prevDespesa = sumByTypeComp(prevComp,'despesa');
     if(prevDespesa===0){
       insightEl.textContent = 'Ainda não há dados do mês anterior pra comparar.';
     } else {
@@ -2743,12 +2850,26 @@ function renderEventItemsEditor(){
   if(!box) return;
   const total = EVENT_ITEMS_DRAFT.reduce((s,it)=>s+Number(it.value||0),0);
   box.innerHTML = `
-    ${EVENT_ITEMS_DRAFT.map((it,idx)=>`
-      <div style="display:flex; gap:8px; margin-bottom:8px;">
-        <input type="text" placeholder="Descrição (ex: Hora extra, Montagem...)" value="${it.description||''}" data-item-desc="${idx}" style="flex:2;">
-        <input type="number" step="0.01" placeholder="Valor" value="${it.value||''}" data-item-value="${idx}" style="flex:1;">
+    ${EVENT_ITEMS_DRAFT.map((it,idx)=>{
+      const isHora = it.mode === 'hora';
+      return `
+      <div style="display:flex; gap:8px; margin-bottom:8px; align-items:center; flex-wrap:wrap;">
+        <input type="text" placeholder="Descrição (ex: Evento, Hora extra, Montagem...)" value="${it.description||''}" data-item-desc="${idx}" style="flex:2; min-width:140px;">
+        <select data-item-mode="${idx}" style="flex:0 0 120px;">
+          <option value="fixo" ${!isHora?'selected':''}>Valor fixo</option>
+          <option value="hora" ${isHora?'selected':''}>Horas × valor/h</option>
+        </select>
+        ${isHora ? `
+          <input type="number" step="0.5" placeholder="Horas" value="${it.hours||''}" data-item-hours="${idx}" style="flex:0 0 80px;">
+          <span style="color:var(--text-secondary); font-size:12px;">×</span>
+          <input type="number" step="0.01" placeholder="R$/hora" value="${it.rate||''}" data-item-rate="${idx}" style="flex:0 0 90px;">
+          <span style="font-size:13px; font-weight:700; flex:0 0 80px;">${fmtBRL(it.value||0)}</span>
+        ` : `
+          <input type="number" step="0.01" placeholder="Valor" value="${it.value||''}" data-item-value="${idx}" style="flex:1; min-width:90px;">
+        `}
         <button type="button" class="icon-btn" data-item-del="${idx}">${ICONS.trash}</button>
-      </div>`).join('')}
+      </div>`;
+    }).join('')}
     <button type="button" class="btn btn-sm" id="btnAddEventItem">+ Adicionar item</button>
     <div style="display:flex; justify-content:space-between; margin-top:10px; padding-top:10px; border-top:1px solid var(--border); font-size:14px;">
       <b>Total do evento</b><b style="color:var(--green);">${fmtBRL(total)}</b>
@@ -2757,8 +2878,26 @@ function renderEventItemsEditor(){
   box.querySelectorAll('[data-item-desc]').forEach(inp=>inp.addEventListener('input', (ev)=>{
     EVENT_ITEMS_DRAFT[inp.dataset.itemDesc].description = ev.target.value;
   }));
+  box.querySelectorAll('[data-item-mode]').forEach(sel=>sel.addEventListener('change', (ev)=>{
+    const it = EVENT_ITEMS_DRAFT[sel.dataset.itemMode];
+    it.mode = ev.target.value;
+    if(it.mode==='hora'){ it.hours = it.hours||0; it.rate = it.rate||0; it.value = Number(it.hours)*Number(it.rate); }
+    renderEventItemsEditor();
+  }));
   box.querySelectorAll('[data-item-value]').forEach(inp=>inp.addEventListener('input', (ev)=>{
     EVENT_ITEMS_DRAFT[inp.dataset.itemValue].value = parseFloat(ev.target.value)||0;
+    renderEventItemsEditor();
+  }));
+  box.querySelectorAll('[data-item-hours]').forEach(inp=>inp.addEventListener('input', (ev)=>{
+    const it = EVENT_ITEMS_DRAFT[inp.dataset.itemHours];
+    it.hours = parseFloat(ev.target.value)||0;
+    it.value = Number(it.hours)*Number(it.rate||0);
+    renderEventItemsEditor();
+  }));
+  box.querySelectorAll('[data-item-rate]').forEach(inp=>inp.addEventListener('input', (ev)=>{
+    const it = EVENT_ITEMS_DRAFT[inp.dataset.itemRate];
+    it.rate = parseFloat(ev.target.value)||0;
+    it.value = Number(it.hours||0)*Number(it.rate);
     renderEventItemsEditor();
   }));
   box.querySelectorAll('[data-item-del]').forEach(btn=>btn.addEventListener('click', ()=>{
@@ -2766,7 +2905,7 @@ function renderEventItemsEditor(){
     renderEventItemsEditor();
   }));
   document.getElementById('btnAddEventItem').addEventListener('click', ()=>{
-    EVENT_ITEMS_DRAFT.push({description:'', value:0});
+    EVENT_ITEMS_DRAFT.push({description:'', mode:'fixo', value:0});
     renderEventItemsEditor();
   });
 }
@@ -2775,7 +2914,7 @@ function openEventModal(id){
   const editing = id ? DB.events.find(e=>e.id===id) : null;
   const nextNumber = editing ? editing.number : (Math.max(0,...DB.events.map(e=>e.number))+1);
   const e = editing || {number:nextNumber, date:todayISO(), local:'', type:EVENT_TYPES[0], function:FUNCTIONS[0], hours:'', status:'agendado', paymentDate:'', notes:''};
-  EVENT_ITEMS_DRAFT = editing && editing.items ? editing.items.map(it=>({...it})) : (editing ? [{description:'Evento', value:Number(editing.totalValue)||0}] : []);
+  EVENT_ITEMS_DRAFT = editing && editing.items ? editing.items.map(it=>({...it})) : (editing ? [{description:'Evento', mode:'fixo', value:Number(editing.totalValue)||0}] : [{description:'Evento', mode:'hora', hours:'', rate:'', value:0}]);
   openModal(`
     <div class="modal-head"><h3>${editing?'Editar':'Novo'} evento</h3><button id="modalClose">&times;</button></div>
     <div class="form-grid">
@@ -2934,9 +3073,11 @@ function openPayInvoiceModal(name){
 
     // 2) lança a saída na conta escolhida — o saldo dela é calculado a partir das
     //    Movimentações, então essa mesma linha já desconta sozinha, sem precisar mexer em mais nada.
+    //    Marcamos como "pagamento de fatura" pra não contar como gasto de novo nos gráficos —
+    //    as compras que compõem essa fatura já foram contadas como gasto quando você as lançou.
     DB.movements.push({
       id:uid(), date:data, type:'despesa', category:'Financeiro', account:contaOrigem, paymentMethod:'Transferência',
-      description:`Pagamento fatura ${c.name}`, amount:valor, competencia:competenciaOf(data)
+      description:`Pagamento fatura ${c.name}`, amount:valor, competencia:competenciaOf(data), isInvoicePayment:true
     });
 
     saveDB(DB); closeModal(); renderAll();
@@ -3137,7 +3278,7 @@ function openMonthClosingModal(){
   const despesaPrev = sumByTypeComp(prevComp,'despesa');
 
   const byCat = {};
-  DB.movements.filter(m=>m.competencia===comp && m.type==='despesa').forEach(m=>{ byCat[m.category] = (byCat[m.category]||0) + Number(m.amount); });
+  DB.movements.filter(m=>m.competencia===comp && m.type==='despesa' && !m.isInvoicePayment).forEach(m=>{ byCat[m.category] = (byCat[m.category]||0) + Number(m.amount); });
   const catEntries = Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
   const topCat = catEntries[0];
 
@@ -3758,6 +3899,22 @@ document.getElementById('btnEditGoal').addEventListener('click', ()=>openSavings
 document.getElementById('calPrevMonth').addEventListener('click', ()=>{ CALENDAR_OFFSET--; CALENDAR_SELECTED_DAY=null; renderCalendarView(); });
 document.getElementById('calNextMonth').addEventListener('click', ()=>{ CALENDAR_OFFSET++; CALENDAR_SELECTED_DAY=null; renderCalendarView(); });
 document.getElementById('calViewGrid').addEventListener('click', ()=>{ CALENDAR_VIEW_MODE='grid'; CALENDAR_SELECTED_DAY=null; renderCalendarView(); });
+document.getElementById('rxdPeriodToggle').addEventListener('click', (ev)=>{
+  const btn = ev.target.closest('button[data-period]');
+  if(!btn) return;
+  RXD_PERIOD = btn.dataset.period;
+  document.querySelectorAll('#rxdPeriodToggle button').forEach(b=>b.classList.toggle('active', b===btn));
+  document.getElementById('rxdPeriodLabel').textContent = RXD_PERIOD==='month' ? 'Este mês' : 'Últimos 6 meses';
+  renderChartRxD();
+});
+document.getElementById('catPeriodToggle').addEventListener('click', (ev)=>{
+  const btn = ev.target.closest('button[data-period]');
+  if(!btn) return;
+  CAT_PERIOD = btn.dataset.period;
+  document.querySelectorAll('#catPeriodToggle button').forEach(b=>b.classList.toggle('active', b===btn));
+  document.getElementById('catPeriodLabel').textContent = CAT_PERIOD==='month' ? 'Este mês' : 'Últimos 6 meses';
+  renderChartCat();
+});
 document.getElementById('calViewList').addEventListener('click', ()=>{ CALENDAR_VIEW_MODE='list'; renderCalendarView(); });
 document.getElementById('btnMonthClosing').addEventListener('click', openMonthClosingModal);
 document.getElementById('btnAddReserve').addEventListener('click', ()=>openReserveModal(null));
@@ -3787,6 +3944,7 @@ function renderAll(){
   safeRun(renderAlerts, 'alertas');
   safeRun(renderMovTable, 'movimentações');
   safeRun(renderInvoicesView, 'faturas por cartão');
+  safeRun(renderInvoiceHistoryView, 'faturas anteriores');
   safeRun(renderEventsView, 'eventos');
   safeRun(renderInstallmentsView, 'parcelamentos');
   safeRun(renderFixedExpensesView, 'gastos fixos');
