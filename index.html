@@ -995,7 +995,7 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
 
 const STORAGE_KEY = 'findash_v3';
 
-const CATEGORIES = ['Alimentação','Transporte','Saúde','Faculdade','Tecnologia','Lazer','Assinaturas','Moradia','Vestuário','Financeiro','Poupança','Outros'];
+const CATEGORIES = ['Alimentação','Transporte','Saúde','Faculdade','Tecnologia','Lazer','Assinaturas','Moradia','Vestuário','Financeiro','Poupança','Reembolsável','Outros'];
 const PAYMENT_METHODS = ['Pix','Débito','Crédito','Transferência','Dinheiro'];
 const ACCOUNTS = ['Nubank','PicPay','Mercado Pago'];
 const CARD_NAMES = ['Nubank','PicPay','Mercado Pago'];
@@ -1022,6 +1022,7 @@ const CATEGORY_ICONS = {
   'Vestuário':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3l4 2 4-2 4 4-3 3v11H7V10L4 7Z"/></svg>',
   'Financeiro':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 9.5c0-1.5 1.3-2.3 3-2.3s3 .9 3 2.2-1 1.8-3 2.1-3 .9-3 2.2 1.3 2.3 3 2.3 3-.8 3-2.3"/></svg>',
   'Poupança':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12c0-3 3-6 8-6 3 0 5 1 6 2h1a1 1 0 0 1 1 1v3l-2 1v2l-2 1v1H9v-2c-3-1-5-3-5-3Z"/><circle cx="16" cy="8.5" r=".8" fill="currentColor" stroke="none"/></svg>',
+  'Reembolsável':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h11a4 4 0 0 1 0 8H9"/><path d="M12 12 8 15l4 3"/></svg>',
   'Outros':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>',
 };
 function categoryIconBadge(cat, size=22){
@@ -1365,7 +1366,9 @@ function nextCompetencia(comp){
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
 }
 function sumByTypeComp(comp, type){
-  return DB.movements.filter(m=>m.competencia===comp && m.type===type && !m.isInvoicePayment).reduce((s,m)=>s+Number(m.amount),0);
+  return DB.movements
+    .filter(m=>m.competencia===comp && m.type===type && !m.isInvoicePayment && !(type==='despesa' && m.category==='Reembolsável'))
+    .reduce((s,m)=>s+Number(m.amount),0);
 }
 function last12Competencias(){
   const arr = [];
@@ -1509,6 +1512,13 @@ function migrateBaselines(){
       c.invoiceBaselineCycle = lastClosedCycle;
       changed = true;
     }
+    if(!c.nextInvoiceBaselineCycle){
+      // valor legado: assume que já deveria ter fechado (evita deixar valores presos
+      // em "aberto" pra sempre por causa de uma correção manual feita antes dessa versão).
+      const {lastClosedCycle} = getCardCycles(c.closingDay);
+      c.nextInvoiceBaselineCycle = lastClosedCycle;
+      changed = true;
+    }
   });
   DB.movements.forEach(m=>{
     if(m.category==='Financeiro' && m.paymentMethod==='Transferência' && m.description && m.description.startsWith('Pagamento fatura ') && m.isInvoicePayment===undefined){
@@ -1637,7 +1647,11 @@ function getComputedInvoice(c){
   // fechado (guardamos isso como um rótulo fixo "AAAA-MM", nunca recalculado a partir de uma data solta).
   const {lastClosedCycle} = getCardCycles(c.closingDay);
   const baselineCycle = c.invoiceBaselineCycle || lastClosedCycle;
-  const baseline = (baselineCycle <= lastClosedCycle) ? (Number(c.currentInvoice)||0) : 0;
+  let baseline = (baselineCycle <= lastClosedCycle) ? (Number(c.currentInvoice)||0) : 0;
+  // se o ponto de partida da "fatura em aberto" já pertence a um ciclo que fechou nesse meio
+  // tempo, ele "vira" fatura fechada sozinho — é isso que faz o fechamento ser automático de verdade.
+  const nextBaselineCycle = c.nextInvoiceBaselineCycle || lastClosedCycle;
+  if(nextBaselineCycle <= lastClosedCycle){ baseline += Number(c.nextInvoiceBaseline)||0; }
   const excluded = c.excludedMovementIds || [];
   const delta = DB.movements
     .filter(m=> m.account===c.name && m.paymentMethod==='Crédito' && m.type==='despesa' && !excluded.includes(m.id)
@@ -1647,11 +1661,12 @@ function getComputedInvoice(c){
 }
 function getComputedNextInvoice(c){
   // "Fatura atual (em aberto)" = comprado depois do fechamento, ainda acumulando pro ciclo que vai
-  // fechar no mês que vem. Se o ponto de partida foi marcado como pertencente a esse ciclo aberto,
-  // ele entra aqui em vez de entrar na fatura fechada.
+  // fechar no mês que vem. O ponto de partida só entra aqui se ainda pertence ao ciclo aberto —
+  // assim que o ciclo dele fechar, o valor "graduado" passa a contar na fatura fechada (acima).
   const {lastClosedCycle, openCycle} = getCardCycles(c.closingDay);
+  const nextBaselineCycle = c.nextInvoiceBaselineCycle || lastClosedCycle;
+  let baseline = (nextBaselineCycle === openCycle) ? (Number(c.nextInvoiceBaseline)||0) : 0;
   const baselineCycle = c.invoiceBaselineCycle || lastClosedCycle;
-  let baseline = Number(c.nextInvoiceBaseline)||0;
   if(baselineCycle > lastClosedCycle){ baseline += Number(c.currentInvoice)||0; }
   const excluded = c.excludedMovementIds || [];
   const delta = DB.movements
@@ -1946,6 +1961,7 @@ function creditCardBarHTML(c){
       <div><span class="cc-label">Limite disponível</span><b>${fmtBRL(avail)}</b></div>
       <div><span class="cc-label">% usado</span><b>${pct.toFixed(0)}%</b></div>
       <button class="btn btn-sm" data-show-breakdown="${c.name}" style="background:transparent; border:1px solid var(--border);">Ver conta</button>
+      <button class="btn btn-sm" data-close-invoice="${c.name}" style="background:transparent; border:1px solid var(--border);" ${nextInv<=0 ? 'disabled style="opacity:.4; cursor:not-allowed;"' : ''}>Fechar fatura</button>
       <button class="btn btn-sm" data-pay-card="${c.name}" ${invoice<=0 ? 'disabled style="opacity:.4; cursor:not-allowed;"' : ''}>Pagar fatura</button>
     </div>
   </div>`;
@@ -1992,6 +2008,7 @@ function creditCardHTML(c, withActions){
 
     ${withActions ? `<div class="cc-actions">
       <button class="btn btn-sm" data-show-breakdown="${c.name}" style="background:transparent; border:1px solid var(--border);">Ver conta</button>
+      <button class="btn btn-sm" data-close-invoice="${c.name}" style="background:transparent; border:1px solid var(--border);" ${nextInv<=0 ? 'disabled style="opacity:.4; cursor:not-allowed;"' : ''}>Fechar fatura</button>
       <button class="btn btn-sm" data-pay-card="${c.name}" ${invoice<=0 ? 'disabled style="opacity:.4; cursor:not-allowed;"' : ''}>Pagar fatura</button>
       <button class="icon-btn" data-edit-card="${c.name}">${ICONS.edit}</button>
     </div>` : ''}
@@ -2028,6 +2045,9 @@ function renderCardsCentral(){
   });
   document.querySelectorAll('[data-show-breakdown]').forEach(btn=>{
     btn.addEventListener('click', ()=> openLimitBreakdownModal(btn.dataset.showBreakdown));
+  });
+  document.querySelectorAll('[data-close-invoice]').forEach(btn=>{
+    btn.addEventListener('click', ()=> closeInvoiceManually(btn.dataset.closeInvoice));
   });
 
   const t = cardTotals();
@@ -2232,6 +2252,24 @@ function projectFutureInvoices(cardName, monthsAhead){
     result.push({label, items, total});
   }
   return result;
+}
+
+function closeInvoiceManually(cardName){
+  const c = DB.cards.find(x=>x.name===cardName);
+  if(!c) return;
+  const openAmount = getComputedNextInvoice(c);
+  const closedAmount = getComputedInvoice(c);
+  if(!confirm(`Fechar a fatura atual do ${cardName} agora?\n\nO que está em "fatura atual (em aberto)" (${fmtBRL(openAmount)}) vira "fatura fechada" (somando com o que já estava lá, se ainda não foi pago), e a fatura em aberto zera pra começar o próximo ciclo.`)) return;
+
+  const {lastClosedCycle, openCycle} = getCardCycles(c.closingDay);
+  c.currentInvoice = Math.round((closedAmount + openAmount)*100)/100;
+  c.invoiceBaselineCycle = lastClosedCycle;
+  c.nextInvoiceBaseline = 0;
+  c.nextInvoiceBaselineCycle = openCycle;
+  resetCardBaseline(c);
+
+  saveDB(DB); renderAll();
+  showToast(`Fatura do ${cardName} fechada manualmente.`);
 }
 
 function openLimitBreakdownModal(cardName){
@@ -3213,8 +3251,9 @@ function openCardModal(name){
       // ao resetar a exclusão) — só o campo que você realmente digitou muda.
       c.currentInvoice = correctingInvoice ? newInvoice : invoiceFechada;
       c.nextInvoiceBaseline = correctingNextInvoice ? newNextInvoice : invoiceAberta;
-      const {lastClosedCycle} = getCardCycles(c.closingDay);
+      const {lastClosedCycle, openCycle} = getCardCycles(c.closingDay);
       c.invoiceBaselineCycle = lastClosedCycle;
+      c.nextInvoiceBaselineCycle = openCycle;
       resetCardBaseline(c); // só esse cartão "esquece" as movimentações já contadas
     }
     if(correctingSaldo){
@@ -3273,8 +3312,11 @@ function openPayInvoiceModal(name){
     //    fatura atual (em aberto) — senão esse valor se perderia ao resetar a exclusão.
     //    Só depois disso aplicamos o novo ponto de partida da fatura fechada (já com o
     //    pagamento descontado) e "esquecemos" as movimentações SÓ desse cartão.
+    const {openCycle} = getCardCycles(c.closingDay);
     c.nextInvoiceBaseline = getComputedNextInvoice(c);
+    c.nextInvoiceBaselineCycle = openCycle;
     c.currentInvoice = Math.max(0, Math.round((invoiceAtual-valor)*100)/100);
+    c.invoiceBaselineCycle = lastClosedCycle;
     resetCardBaseline(c);
 
     // 3) lança a saída na conta escolhida — o saldo dela é calculado a partir das
@@ -3484,7 +3526,7 @@ function openMonthClosingModal(){
   const despesaPrev = sumByTypeComp(prevComp,'despesa');
 
   const byCat = {};
-  DB.movements.filter(m=>m.competencia===comp && m.type==='despesa' && !m.isInvoicePayment).forEach(m=>{ byCat[m.category] = (byCat[m.category]||0) + Number(m.amount); });
+  DB.movements.filter(m=>m.competencia===comp && m.type==='despesa' && !m.isInvoicePayment && m.category!=='Reembolsável').forEach(m=>{ byCat[m.category] = (byCat[m.category]||0) + Number(m.amount); });
   const catEntries = Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
   const topCat = catEntries[0];
 
