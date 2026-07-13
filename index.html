@@ -1513,10 +1513,12 @@ function migrateBaselines(){
       changed = true;
     }
     if(!c.nextInvoiceBaselineCycle){
-      // valor legado: assume que já deveria ter fechado (evita deixar valores presos
-      // em "aberto" pra sempre por causa de uma correção manual feita antes dessa versão).
-      const {lastClosedCycle} = getCardCycles(c.closingDay);
-      c.nextInvoiceBaselineCycle = lastClosedCycle;
+      // valor legado: assume que o que estava em "fatura em aberto" ainda pertence ao
+      // ciclo aberto agora. Fechar à força um valor que o usuário não pediu pra fechar
+      // causa fatura fechada errada — é mais seguro deixar como está e o usuário fechar
+      // manualmente (botão "Fechar fatura") se precisar.
+      const {openCycle} = getCardCycles(c.closingDay);
+      c.nextInvoiceBaselineCycle = openCycle;
       changed = true;
     }
   });
@@ -1534,6 +1536,31 @@ function migrateBaselines(){
     if(DB.accountBalancesAsOf) delete DB.accountBalancesAsOf['Neon'];
     DB.fixedExpenses = (DB.fixedExpenses||[]).filter(f=>f.account!=='Neon');
     DB.neonRemoved = true;
+    changed = true;
+  }
+  if(!DB.invoiceCorrectionJuly2026){
+    // correção pontual: uma migração anterior fechou à força faturas que ainda não
+    // deveriam ter fechado, misturando valores errados no Nubank e PicPay. Aqui
+    // definimos os valores certos, confirmados diretamente pelo usuário.
+    const nu = DB.cards.find(c=>c.name==='Nubank');
+    if(nu){
+      const {lastClosedCycle, openCycle} = getCardCycles(nu.closingDay);
+      nu.currentInvoice = 0; // fatura de julho já foi paga
+      nu.invoiceBaselineCycle = lastClosedCycle;
+      nu.nextInvoiceBaseline = 422.94;
+      nu.nextInvoiceBaselineCycle = openCycle;
+      nu.excludedMovementIds = DB.movements.map(m=>m.id);
+    }
+    const pp = DB.cards.find(c=>c.name==='PicPay');
+    if(pp){
+      const {lastClosedCycle, openCycle} = getCardCycles(pp.closingDay);
+      pp.currentInvoice = 1073.75; // fatura de julho, fechada, ainda não paga
+      pp.invoiceBaselineCycle = lastClosedCycle;
+      pp.nextInvoiceBaseline = 308.23;
+      pp.nextInvoiceBaselineCycle = openCycle;
+      pp.excludedMovementIds = DB.movements.map(m=>m.id);
+    }
+    DB.invoiceCorrectionJuly2026 = true;
     changed = true;
   }
   if(!DB.reservesLinkedToMovements){
