@@ -1469,10 +1469,10 @@ function autoLaunchRecurring(){
     const startsFrom = i.autoLaunchFrom || comp;
     if(comp < startsFrom) return;
     const already = DB.movements.some(m=>m.installmentId===i.id && m.competencia===comp);
-    const billingDay = Number((i.purchaseDate||'').split('-')[2]) || 5;
-    if(!already && todayDay >= billingDay){
-      const day = Math.min(billingDay, lastDayThisMonth);
-      const date = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    if(!already){
+      // lança assim que o mês fica elegível — não espera o dia exato da compra original,
+      // porque a parcela deve entrar na fatura assim que o ciclo abrir, não só num dia específico.
+      const date = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(todayDay).padStart(2,'0')}`;
       const parcelaAtual = Number(i.installmentsCount) - Number(i.remainingInstallments) + 1;
       DB.movements.push({
         id:uid(), date, type:'despesa', category:i.category, account:i.card, paymentMethod:'Crédito',
@@ -2203,7 +2203,7 @@ function renderInvoicesView(){
       .map(m=>({name:m.description, category:m.category, date:m.date, value:Number(m.amount), real:true}));
     // Parcelas ativas desse cartão que ainda vão entrar nesse ciclo, mas ainda não
     // viraram lançamento (o dia de cobrança ainda não chegou este mês).
-    const forecastItems = (DB.installments||[]).filter(i=>i.card===c.name && Number(i.remainingInstallments)>0).filter(i=>{
+    const forecastItems = (DB.installments||[]).filter(i=>i.card===c.name && Number(i.remainingInstallments)>0 && (i.autoLaunchFrom||comp)<=comp).filter(i=>{
       const jaLancado = DB.movements.some(m=>m.installmentId===i.id && m.competencia===comp);
       return !jaLancado;
     }).map(i=>({name:`${i.purchase} (parcela)`, category:i.category, date:null, value:Number(i.installmentValue), real:false}));
