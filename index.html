@@ -1466,11 +1466,17 @@ function autoLaunchRecurring(){
   });
 
   (DB.installments||[]).filter(i=>Number(i.remainingInstallments)>0).forEach(i=>{
+    // usa o ciclo do PRÓPRIO cartão (baseado no dia de fechamento) pra saber se já pode
+    // lançar — não o mês do calendário, porque o cartão pode já estar no ciclo seguinte
+    // mesmo o calendário ainda não ter virado o mês (ex: fechou dia 7, hoje é dia 20,
+    // calendário ainda diz "julho" mas o cartão já está na fatura de agosto).
+    const card = DB.cards.find(c=>c.name===i.card);
+    const period = card ? getCardCycles(card.closingDay).openCycle : comp;
     const startsFrom = i.autoLaunchFrom || comp;
-    if(comp < startsFrom) return;
+    if(period < startsFrom) return;
     const already = DB.movements.some(m=>m.installmentId===i.id && m.competencia===comp);
     if(!already){
-      // lança assim que o mês fica elegível — não espera o dia exato da compra original,
+      // lança assim que o ciclo fica elegível — não espera o dia exato da compra original,
       // porque a parcela deve entrar na fatura assim que o ciclo abrir, não só num dia específico.
       const date = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(todayDay).padStart(2,'0')}`;
       const parcelaAtual = Number(i.installmentsCount) - Number(i.remainingInstallments) + 1;
@@ -1561,6 +1567,26 @@ function migrateBaselines(){
       pp.excludedMovementIds = DB.movements.map(m=>m.id);
     }
     DB.invoiceCorrectionJuly2026 = true;
+    changed = true;
+  }
+  if(!DB.invoiceCorrectionJuly2026v2){
+    // a correção anterior usou um número fixo pra "fatura aberta", que ficou desatualizado
+    // assim que novas compras foram lançadas (elas ficaram "escondidas" do cálculo oficial,
+    // presas numa lista de exclusão antiga). Aqui trocamos pra excluir só o que já fechou
+    // e foi pago de verdade — o resto passa a contar direto das movimentações, sempre
+    // atualizado, sem depender de nenhum número fixo guardado.
+    ['Nubank','PicPay'].forEach(name=>{
+      const c = DB.cards.find(x=>x.name===name);
+      if(!c) return;
+      const {lastClosedCycle, openCycle} = getCardCycles(c.closingDay);
+      c.excludedMovementIds = DB.movements
+        .filter(m=>m.account===name && m.paymentMethod==='Crédito' && m.type==='despesa'
+          && getInvoiceCycle(m.date, c.closingDay) <= lastClosedCycle)
+        .map(m=>m.id);
+      c.nextInvoiceBaseline = 0;
+      c.nextInvoiceBaselineCycle = openCycle;
+    });
+    DB.invoiceCorrectionJuly2026v2 = true;
     changed = true;
   }
   if(!DB.reservesLinkedToMovements){
