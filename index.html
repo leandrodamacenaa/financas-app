@@ -1492,6 +1492,32 @@ function eventsTotals(){
   const last = [...DB.events].sort((a,b)=>b.date.localeCompare(a.date))[0];
   return {total, paidCount:paid.length, pendingCount:pending.length, scheduledCount:scheduled.length, received, toReceive, last};
 }
+function installmentLaunchInfo(i){
+  // usa o ciclo do PRÓPRIO cartão (baseado no dia de fechamento) pra saber se já pode
+  // lançar E se já foi lançado — não o mês do calendário, porque o cartão pode já estar
+  // no ciclo seguinte mesmo o calendário ainda não ter virado o mês (ex: fechou dia 6,
+  // hoje é dia 20, calendário ainda diz "agosto" mas o cartão já está na fatura de setembro).
+  const comp = currentCompetencia();
+  const card = DB.cards.find(c=>c.name===i.card);
+  const period = card ? getCardCycles(card.closingDay).openCycle : comp;
+  const startsFrom = i.autoLaunchFrom || comp;
+  const eligible = period >= startsFrom;
+  const already = eligible && DB.movements.some(m=>m.installmentId===i.id &&
+    (card ? getInvoiceCycle(m.date, card.closingDay)===period : m.competencia===comp));
+  return {canLaunch: eligible && !already};
+}
+function launchInstallmentNow(i){
+  const today = new Date();
+  const date = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  const parcelaAtual = Number(i.installmentsCount) - Number(i.remainingInstallments) + 1;
+  DB.movements.push({
+    id:uid(), date, type:'despesa', category:i.category, account:i.card, paymentMethod:'Crédito',
+    description:`${i.purchase} (Parcela ${parcelaAtual}/${i.installmentsCount})`, amount:Number(i.installmentValue),
+    competencia:competenciaOf(date), installmentId:i.id
+  });
+  i.remainingInstallments = Number(i.remainingInstallments) - 1;
+}
+
 function autoLaunchRecurring(){
   // Lança sozinho, uma vez por mês, os gastos fixos e parcelas ativas — sem duplicar
   // e sem mexer no mês em que a coisa foi criada (esse já foi tratado manualmente).
@@ -1517,27 +1543,8 @@ function autoLaunchRecurring(){
   });
 
   (DB.installments||[]).filter(i=>Number(i.remainingInstallments)>0).forEach(i=>{
-    // usa o ciclo do PRÓPRIO cartão (baseado no dia de fechamento) pra saber se já pode
-    // lançar E se já foi lançado — não o mês do calendário, porque o cartão pode já estar
-    // no ciclo seguinte mesmo o calendário ainda não ter virado o mês (ex: fechou dia 6,
-    // hoje é dia 20, calendário ainda diz "agosto" mas o cartão já está na fatura de setembro).
-    const card = DB.cards.find(c=>c.name===i.card);
-    const period = card ? getCardCycles(card.closingDay).openCycle : comp;
-    const startsFrom = i.autoLaunchFrom || comp;
-    if(period < startsFrom) return;
-    const already = DB.movements.some(m=>m.installmentId===i.id &&
-      (card ? getInvoiceCycle(m.date, card.closingDay)===period : m.competencia===comp));
-    if(!already){
-      // lança assim que o ciclo fica elegível — não espera o dia exato da compra original,
-      // porque a parcela deve entrar na fatura assim que o ciclo abrir, não só num dia específico.
-      const date = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(todayDay).padStart(2,'0')}`;
-      const parcelaAtual = Number(i.installmentsCount) - Number(i.remainingInstallments) + 1;
-      DB.movements.push({
-        id:uid(), date, type:'despesa', category:i.category, account:i.card, paymentMethod:'Crédito',
-        description:`${i.purchase} (Parcela ${parcelaAtual}/${i.installmentsCount})`, amount:Number(i.installmentValue),
-        competencia:competenciaOf(date), installmentId:i.id
-      });
-      i.remainingInstallments = Number(i.remainingInstallments) - 1;
+    if(installmentLaunchInfo(i).canLaunch){
+      launchInstallmentNow(i);
       launched++;
     }
   });
@@ -3466,6 +3473,7 @@ function renderInstallmentsView(){
     const paidValue = done*i.installmentValue;
     const remaining = i.installmentValue*i.remainingInstallments;
     const total = i.installmentValue*i.installmentsCount;
+    const canLaunch = !quitado && installmentLaunchInfo(i).canLaunch;
     return `
     <tr style="${quitado?'opacity:.6;':''}">
       <td style="display:flex; align-items:center; gap:8px; font-weight:600;">${categoryIconBadge(i.category,22)}${i.purchase}</td>
@@ -3475,7 +3483,10 @@ function renderInstallmentsView(){
       <td style="color:var(--green);">${fmtBRL(paidValue)}</td>
       <td style="color:${quitado?'var(--text-secondary)':'var(--amber)'}; font-weight:700;">${fmtBRL(remaining)}</td>
       <td style="color:var(--text-dim);">${fmtBRL(total)}</td>
-      <td><button class="icon-btn" data-del-inst="${i.id}">${ICONS.trash}</button></td>
+      <td><div class="row-actions">
+        ${canLaunch ? `<button class="btn btn-sm" data-launch-inst="${i.id}" title="Lançar a parcela desse ciclo agora, sem esperar o automático">Lançar parcela</button>` : ''}
+        <button class="icon-btn" data-del-inst="${i.id}">${ICONS.trash}</button>
+      </div></td>
     </tr>`;
   };
 
@@ -3502,6 +3513,18 @@ function renderInstallmentsView(){
       </table>
     </div>` : ''}`;
 
+  box.querySelectorAll('[data-launch-inst]').forEach(b=>b.addEventListener('click', ()=>{
+    const inst = DB.installments.find(i=>i.id===b.dataset.launchInst);
+    if(!inst) return;
+    if(!installmentLaunchInfo(inst).canLaunch){
+      showToast('Essa parcela já foi lançada nesse ciclo.');
+      renderAll();
+      return;
+    }
+    launchInstallmentNow(inst);
+    saveDB(DB); renderAll();
+    showToast(`Parcela de "${inst.purchase}" lançada.`);
+  }));
   box.querySelectorAll('[data-del-inst]').forEach(b=>b.addEventListener('click', ()=>{
     const instId = b.dataset.delInst;
     const linkedCount = DB.movements.filter(m=>m.installmentId===instId).length;
