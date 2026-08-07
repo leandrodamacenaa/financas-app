@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Finanças — Leandro</title>
+<title>Finanças — Meu Financeiro</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0b0b10">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -659,7 +659,7 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
 
     <div class="topbar">
       <div class="greeting">
-        <h1>Olá, Leandro! <span id="moodEmoji">👋</span></h1>
+        <h1>Olá, <span id="userNameGreeting">você</span>! <span id="moodEmoji">👋</span></h1>
         <p id="moodSub">Aqui está o resumo da sua vida financeira</p>
       </div>
       <div class="top-right" style="align-items:flex-end;">
@@ -934,6 +934,14 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
     <section class="view" id="view-settings">
       <div class="section-title"><div><h2>Configurações</h2><div class="sub">Backup e gestão dos seus dados</div></div></div>
       <div class="settings-grid">
+        <div class="settings-card">
+          <h4>Seu nome</h4>
+          <p>Esse nome aparece na saudação do Dashboard. Cada login tem o seu próprio, sem afetar outras contas.</p>
+          <div style="display:flex; gap:8px;">
+            <input type="text" id="f_username" placeholder="Como você quer ser chamado?" style="flex:1;">
+            <button class="btn btn-primary" id="btnSaveUsername">Salvar</button>
+          </div>
+        </div>
         <div class="settings-card">
           <h4>Exportar dados (JSON)</h4>
           <p>Baixe um arquivo com todos os seus dados: movimentações, eventos, cartões, parcelamentos e reservas. Use como backup.</p>
@@ -1894,6 +1902,14 @@ function animateCountUp(el, target, isCurrency){
   }
   requestAnimationFrame(frame);
 }
+function renderUserName(){
+  const name = (DB.userName || '').trim();
+  const greetingEl = document.getElementById('userNameGreeting');
+  if(greetingEl) greetingEl.textContent = name || 'você';
+  document.title = name ? `Finanças — ${name}` : 'Finanças — Meu Financeiro';
+  const inputEl = document.getElementById('f_username');
+  if(inputEl && document.activeElement !== inputEl) inputEl.value = name;
+}
 function renderMoodIndicator(disponivelReal){
   const emojiEl = document.getElementById('moodEmoji');
   const subEl = document.getElementById('moodSub');
@@ -1954,6 +1970,7 @@ function renderHeroStats(){
   animateCountUp(document.getElementById('heroGastoMes'), despesaMes, true);
   animateCountUp(document.getElementById('heroDisponivel'), disponivelReal, true);
   renderMoodIndicator(disponivelReal);
+  renderUserName();
 }
 
 function renderKPIs(){
@@ -4148,6 +4165,13 @@ function downloadFile(filename, content, mime){
   URL.revokeObjectURL(url);
 }
 
+document.getElementById('btnSaveUsername').addEventListener('click', ()=>{
+  const val = document.getElementById('f_username').value.trim();
+  DB.userName = val;
+  saveDB(DB);
+  renderUserName();
+  showToast('Nome salvo!');
+});
 document.getElementById('btnExportJson').addEventListener('click', ()=>{
   downloadFile(`financas-backup-${todayISO()}.json`, JSON.stringify(DB, null, 2), 'application/json');
   showToast('JSON exportado.');
