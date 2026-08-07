@@ -3461,31 +3461,46 @@ function renderInstallmentsView(){
   const box = document.getElementById('instCards');
   if(DB.installments.length===0){ box.innerHTML = emptyStateHTML('Nenhum parcelamento cadastrado ainda. Marque "Parcelado" ao criar uma movimentação em crédito.'); return; }
 
+  const rowHTML = (i, quitado)=>{
+    const done = i.installmentsCount - i.remainingInstallments;
+    const paidValue = done*i.installmentValue;
+    const remaining = i.installmentValue*i.remainingInstallments;
+    const total = i.installmentValue*i.installmentsCount;
+    return `
+    <tr style="${quitado?'opacity:.6;':''}">
+      <td style="display:flex; align-items:center; gap:8px; font-weight:600;">${categoryIconBadge(i.category,22)}${i.purchase}</td>
+      <td><span style="display:flex; align-items:center; gap:6px;">${cardBadge(i.card,20)}${i.card}</span></td>
+      <td>${done}/${i.installmentsCount}</td>
+      <td style="font-weight:700;">${fmtBRL(i.installmentValue)}</td>
+      <td style="color:var(--green);">${fmtBRL(paidValue)}</td>
+      <td style="color:${quitado?'var(--text-secondary)':'var(--amber)'}; font-weight:700;">${fmtBRL(remaining)}</td>
+      <td style="color:var(--text-dim);">${fmtBRL(total)}</td>
+      <td><button class="icon-btn" data-del-inst="${i.id}">${ICONS.trash}</button></td>
+    </tr>`;
+  };
+
+  const activeList = DB.installments.filter(i=>i.remainingInstallments>0);
+  const doneList = DB.installments.filter(i=>i.remainingInstallments<=0);
+  const tableHead = `<thead><tr><th>Compra</th><th>Cartão</th><th>Parcela</th><th>Valor mensal</th><th>Já pago</th><th>Resta pagar</th><th>Total</th><th></th></tr></thead>`;
+
   box.innerHTML = `${perCardHTML}
+    <div class="section-title" style="margin-top:0;"><div><h2 style="font-size:16px;">Em andamento</h2><div class="sub">Ainda tem parcela pra pagar</div></div></div>
+    ${activeList.length===0 ? emptyStateHTML('Nenhum parcelamento em andamento no momento.') : `
     <div class="table-card">
       <table>
-        <thead><tr><th>Compra</th><th>Cartão</th><th>Parcela</th><th>Valor mensal</th><th>Já pago</th><th>Resta pagar</th><th>Total</th><th></th></tr></thead>
-        <tbody>
-          ${DB.installments.map(i=>{
-            const done = i.installmentsCount - i.remainingInstallments;
-            const paidValue = done*i.installmentValue;
-            const remaining = i.installmentValue*i.remainingInstallments;
-            const total = i.installmentValue*i.installmentsCount;
-            return `
-            <tr>
-              <td style="display:flex; align-items:center; gap:8px; font-weight:600;">${categoryIconBadge(i.category,22)}${i.purchase}</td>
-              <td><span style="display:flex; align-items:center; gap:6px;">${cardBadge(i.card,20)}${i.card}</span></td>
-              <td>${done}/${i.installmentsCount}</td>
-              <td style="font-weight:700;">${fmtBRL(i.installmentValue)}</td>
-              <td style="color:var(--green);">${fmtBRL(paidValue)}</td>
-              <td style="color:var(--amber); font-weight:700;">${fmtBRL(remaining)}</td>
-              <td style="color:var(--text-dim);">${fmtBRL(total)}</td>
-              <td><button class="icon-btn" data-del-inst="${i.id}">${ICONS.trash}</button></td>
-            </tr>`;
-          }).join('')}
-        </tbody>
+        ${tableHead}
+        <tbody>${activeList.map(i=>rowHTML(i,false)).join('')}</tbody>
       </table>
-    </div>`;
+    </div>`}
+
+    ${doneList.length>0 ? `
+    <div class="section-title" style="margin-top:24px;"><div><h2 style="font-size:16px;">Quitados</h2><div class="sub">Já pagou todas as parcelas — fica aqui só como histórico</div></div></div>
+    <div class="table-card">
+      <table>
+        ${tableHead}
+        <tbody>${doneList.map(i=>rowHTML(i,true)).join('')}</tbody>
+      </table>
+    </div>` : ''}`;
 
   box.querySelectorAll('[data-del-inst]').forEach(b=>b.addEventListener('click', ()=>{
     const instId = b.dataset.delInst;
