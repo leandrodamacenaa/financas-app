@@ -966,6 +966,11 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
           <p>Apaga tudo e recarrega os dados fictícios iniciais. Use com cuidado — essa ação não pode ser desfeita.</p>
           <button class="btn btn-danger" id="btnReset">Resetar dados</button>
         </div>
+        <div class="settings-card">
+          <h4>Começar do zero (em branco)</h4>
+          <p>Apaga tudo e deixa a conta completamente vazia, sem nenhum exemplo — pra montar do zero com seus próprios dados. Essa ação não pode ser desfeita.</p>
+          <button class="btn btn-danger" id="btnResetEmpty">Começar do zero</button>
+        </div>
       </div>
     </section>
 
@@ -1170,6 +1175,25 @@ function seedData(){
   ];
 
   return {movements, events, cards, installments, reserves, accountBalances, accountBalancesAsOf, fixedExpenses, budgets, savingsGoals, meta:{createdAt:new Date().toISOString()}};
+}
+
+function emptyData(){
+  // Ponto de partida totalmente vazio, sem nenhum dado de exemplo — pra quem quer montar
+  // tudo do zero com os próprios números. Os 3 cartões ficam com valores em 0; edite cada
+  // um (lápis ✏️) pra colocar limite, fechamento e vencimento reais.
+  const cards = [
+    {name:'Nubank', limit:0, closingDay:1, dueDay:10, currentInvoice:0, nextInvoiceBaseline:0, invoiceBaselineDate:todayISO()},
+    {name:'PicPay', limit:0, closingDay:1, dueDay:10, currentInvoice:0, nextInvoiceBaseline:0, invoiceBaselineDate:todayISO()},
+    {name:'Mercado Pago', limit:0, closingDay:1, dueDay:10, currentInvoice:0, nextInvoiceBaseline:0, invoiceBaselineDate:todayISO()},
+  ];
+  const todayStr = todayISO();
+  const accountBalances = {'Nubank':0, 'PicPay':0, 'Mercado Pago':0};
+  const accountBalancesAsOf = {'Nubank':todayStr, 'PicPay':todayStr, 'Mercado Pago':todayStr};
+  return {
+    movements:[], events:[], cards, installments:[], reserves:[],
+    accountBalances, accountBalancesAsOf, fixedExpenses:[], budgets:{}, savingsGoals:[],
+    meta:{createdAt:new Date().toISOString()}
+  };
 }
 
 /* ============================================================
@@ -1570,31 +1594,6 @@ function migrateBaselines(){
     if(DB.accountBalancesAsOf) delete DB.accountBalancesAsOf['Neon'];
     DB.fixedExpenses = (DB.fixedExpenses||[]).filter(f=>f.account!=='Neon');
     DB.neonRemoved = true;
-    changed = true;
-  }
-  if(!DB.invoiceCorrectionJuly2026){
-    // correção pontual: uma migração anterior fechou à força faturas que ainda não
-    // deveriam ter fechado, misturando valores errados no Nubank e PicPay. Aqui
-    // definimos os valores certos, confirmados diretamente pelo usuário.
-    const nu = DB.cards.find(c=>c.name==='Nubank');
-    if(nu){
-      const {lastClosedCycle, openCycle} = getCardCycles(nu.closingDay);
-      nu.currentInvoice = 0; // fatura de julho já foi paga
-      nu.invoiceBaselineCycle = lastClosedCycle;
-      nu.nextInvoiceBaseline = 422.94;
-      nu.nextInvoiceBaselineCycle = openCycle;
-      nu.excludedMovementIds = DB.movements.map(m=>m.id);
-    }
-    const pp = DB.cards.find(c=>c.name==='PicPay');
-    if(pp){
-      const {lastClosedCycle, openCycle} = getCardCycles(pp.closingDay);
-      pp.currentInvoice = 1073.75; // fatura de julho, fechada, ainda não paga
-      pp.invoiceBaselineCycle = lastClosedCycle;
-      pp.nextInvoiceBaseline = 308.23;
-      pp.nextInvoiceBaselineCycle = openCycle;
-      pp.excludedMovementIds = DB.movements.map(m=>m.id);
-    }
-    DB.invoiceCorrectionJuly2026 = true;
     changed = true;
   }
   if(!DB.invoiceCorrectionJuly2026v2){
@@ -4232,6 +4231,14 @@ document.getElementById('btnReset').addEventListener('click', ()=>{
     saveDB(DB);
     renderAll();
     showToast('Dados de demonstração restaurados.');
+  }
+});
+document.getElementById('btnResetEmpty').addEventListener('click', ()=>{
+  if(confirm('Isso vai apagar TODOS os dados atuais e deixar a conta completamente vazia (sem exemplos). Essa ação não pode ser desfeita. Continuar?')){
+    DB = emptyData();
+    saveDB(DB);
+    renderAll();
+    showToast('Conta zerada — pronta pra você começar do zero.');
   }
 });
 
